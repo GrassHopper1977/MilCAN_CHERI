@@ -1,0 +1,4 @@
+cc -g -O2 -Wall -mabi=aapcs -cheri-bounds=subobject-safe -lusb -lssl -o testtxq_hy testtxq.c ../txq.c ../timestamp.c
+cc -g -O2 -Wall -mabi=purecap -cheri-bounds=subobject-safe -lusb -lssl -o testtxq testtxq.c ../txq.c ../timestamp.c
+cc -g -O2 -Wall -mabi=aapcs -cheri-bounds=subobject-safe -lusb -lssl -o testtxq2_hy testtxq2.c ../txq.c ../timestamp.c
+cc -g -O2 -Wall -mabi=purecap -cheri-bounds=subobject-safe -lusb -lssl -o testtxq2 testtxq2.c ../txq.c ../timestamp.c
