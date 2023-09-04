@@ -26,34 +26,34 @@
 #define MILCAN_ID_PRIORITY_MAX  7   // The maximum priority value is the lowest priority message
 
 // The predefined Primary and secondary IDs
-#define MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT             0x00
+#define MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT                 0x00
 #define MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME    0x80
 #define MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG  0x81
 #define MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG   0x82
-#define MILCAN_ID_PRIMARY_PHYSICALLY_ADDRESSED          0x31
-#define MILCAN_ID_PRIMARY_SYSTEM_CONFIG                 0x32
-#define MILCAN_ID_PRIMARY_SYSTEM_C_AND_C                0x3C
-#define MILCAN_ID_PRIMARY_MOTION_CONTROL                0x3E
-#define MILCAN_ID_PRIMARY_STA                           0x40
-#define MILCAN_ID_PRIMARY_FIRE_CONTROL                  0x42
-#define MILCAN_ID_PRIMARY_AUTOMOTIVE                    0x44
-#define MILCAN_ID_PRIMARY_NAVIGATION                    0x46
-#define MILCAN_ID_PRIMARY_POWER_MANAGEMENT              0x50
-#define MILCAN_ID_PRIMARY_DAS                           0x52
-#define MILCAN_ID_PRIMARY_COMMUNICATIONS_BMS            0x54
-#define MILCAN_ID_PRIMARY_HVAC_NBC                      0x56
-#define MILCAN_ID_PRIMARY_VISION_SENSOR_CONTROL         0x58
-#define MILCAN_ID_PRIMARY_GENERIC_MMI_DEVICES           0x5A
-#define MILCAN_ID_PRIMARY_FDSS                          0x5C
-#define MILCAN_ID_PRIMARY_LIGHTING                      0x5E
-#define MILCAN_ID_PRIMARY_BODY_ELECTRONICS              0x60
-#define MILCAN_ID_PRIMARY_ALIVE_MESSAGE                 0x62
-#define MILCAN_ID_PRIMARY_DIAGNOSTICS_0                 0x63
-#define MILCAN_ID_PRIMARY_DIAGNOSTICS_1                 0x64
-#define MILCAN_ID_PRIMARY_DIAGNOSTICS_2                 0x65
-#define MILCAN_ID_PRIMARY_DIAGNOSTICS_3                 0x66
+#define MILCAN_ID_PRIMARY_PHYSICALLY_ADDRESSED              0x31
+#define MILCAN_ID_PRIMARY_SYSTEM_CONFIG                     0x32
+#define MILCAN_ID_PRIMARY_SYSTEM_C_AND_C                    0x3C
+#define MILCAN_ID_PRIMARY_MOTION_CONTROL                    0x3E
+#define MILCAN_ID_PRIMARY_STA                               0x40
+#define MILCAN_ID_PRIMARY_FIRE_CONTROL                      0x42
+#define MILCAN_ID_PRIMARY_AUTOMOTIVE                        0x44
+#define MILCAN_ID_PRIMARY_NAVIGATION                        0x46
+#define MILCAN_ID_PRIMARY_POWER_MANAGEMENT                  0x50
+#define MILCAN_ID_PRIMARY_DAS                               0x52
+#define MILCAN_ID_PRIMARY_COMMUNICATIONS_BMS                0x54
+#define MILCAN_ID_PRIMARY_HVAC_NBC                          0x56
+#define MILCAN_ID_PRIMARY_VISION_SENSOR_CONTROL             0x58
+#define MILCAN_ID_PRIMARY_GENERIC_MMI_DEVICES               0x5A
+#define MILCAN_ID_PRIMARY_FDSS                              0x5C
+#define MILCAN_ID_PRIMARY_LIGHTING                          0x5E
+#define MILCAN_ID_PRIMARY_BODY_ELECTRONICS                  0x60
+#define MILCAN_ID_PRIMARY_ALIVE_MESSAGE                     0x62
+#define MILCAN_ID_PRIMARY_DIAGNOSTICS_0                     0x63
+#define MILCAN_ID_PRIMARY_DIAGNOSTICS_1                     0x64
+#define MILCAN_ID_PRIMARY_DIAGNOSTICS_2                     0x65
+#define MILCAN_ID_PRIMARY_DIAGNOSTICS_3                     0x66
 
-/// @brief The MILCAN A frame is standard CAN but with the mortal field (0 means it never expires - anything elese is the time in nanoseconds at which it will expire).
+/// @brief The MILCAN A frame is standard CAN but with the mortal field (0 means it never expires - anything else is the time in nanoseconds at which it will expire).
 struct milcan_frame {
     struct can_frame frame;
     uint64_t mortal;

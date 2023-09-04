@@ -46,9 +46,3 @@ uint64_t nanos() {
     uint64_t ns = SEC_TO_NS((uint64_t)ts.tv_sec) + (uint64_t)ts.tv_nsec;
     return ns;
 }
-
-// void print_time_now() {
-//   struct timeval now;
-//   gettimeofday(&now, NULL);
-//   printf("%ld.%06ld secs", now.tv_sec, now.tv_usec);
-// }
