@@ -25,10 +25,11 @@
 
 
 #include "../BSD-USB-to-CAN/usb2can.h"
-#include "timestamp.h"
 #define LOG_LEVEL 3
 #include "logs.h"
+#include "timestamp.h"
 #include "milcan.h"
+#include "interfaces.h"
 
 #define BUFSIZE 1024
 
@@ -49,7 +50,7 @@ void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, cons
   if(err || (frame->can_id & CAN_ERR_FLAG)) {
     fd = stderr;
   }
-  fprintf(fd, "%lu: %s: %s() line %i: %s: ID: ", nanos(), __FILE__, __FUNCTION__, __LINE__, tag);
+  fprintf(fd, "%lu:  INFO: %s: %s() line %i: %s: ID: ", nanos(), __FILE__, __FUNCTION__, __LINE__, tag);
 
   if((frame->can_id & CAN_EFF_FLAG) || (frame->can_id & CAN_ERR_FLAG)) {
     fprintf(fd, "%08x", frame->can_id & CAN_EFF_MASK);
@@ -97,37 +98,26 @@ void sigint_handler(int sig) {
 #define SYNC_PERIOD_NS  7812500L
 #define SYNC_PERIOD_NS_1PC (uint64_t)(SYNC_PERIOD_NS * 0.01)
 
-void checkTimer(uint64_t* timer, int wfdfifo, uint8_t localAddress, uint16_t* syncCounter) {
-  // struct can_frame frame;	// The incoming frame
+void checkSync(struct milcan_a* interface) {
   uint64_t now = nanos();
-  // static uint16_t count = 0;
-  
-  if(now >= (*timer - SYNC_PERIOD_NS_1PC)) {
-    *timer = now + SYNC_PERIOD_NS;  // Next period from now.
-    // *timer += SYNC_PERIOD_NS; // Next period from when we should've been.
 
-    // // MilCAN Sync Frame
-    // frame.can_id = 0x0200802A | CAN_EFF_FLAG;
-    // frame.len = 2;
-    // frame.data[0] = (uint8_t)(count & 0x000000FF);
-    // frame.data[1] = (uint8_t)((count >> 8) & 0x00000003);
-    // frame.data[2] = 0x00;
-    // frame.data[3] = 0x00;
-    // frame.data[4] = 0x00;
-    // frame.data[5] = 0x00;
-    // frame.data[6] = 0x00;
-    // frame.data[7] = 0x00;
-    // count++;
-    // count &= 0x000003FF;
+  // LOGI(TAG, "                 now: %lu", now);
+  // LOGI(TAG, "interface->syncTimer: %lu", interface->syncTimer);
+  
+  // if(now >= interface->syncTimer) {
+  if(now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) {
+    interface->syncTimer = now + interface->sync_time_ns;  // Next period from now.
+    // interface->syncTimer += interface->sync_time_ns; // Next period from when we should've been.
 
     // MilCAN Sync Frame
-    struct milcan_frame frame = MILCAN_MAKE_SYNC(localAddress, *syncCounter);
-    (*syncCounter)++;
-    (*syncCounter) &= 0x000003FF;
+    interface->sync++;
+    interface->sync &= 0x000003FF;
+    struct milcan_frame frame = MILCAN_MAKE_SYNC(interface->sourceAddress, interface->sync);
 
-    sendcantosck(wfdfifo, &frame);
+    milcan_send(interface, &frame);
   }
 }
+
 
 void displayRTpriority() {
   // Get the current real time priority
@@ -222,7 +212,6 @@ int setRTpriority(u_short prio) {
 
 int main(int argc, char *argv[])
 {
-
   // Create the signal handler here - ensures that Ctrl-C gets passed back up to 
   signal(SIGINT, sigint_handler);
 
@@ -231,19 +220,9 @@ int main(int argc, char *argv[])
   // char buf[BUFSIZE]; 
   // int sckfd;
   int kq, nev, i;
-  struct can_frame frame;	// The incoming frame
-  // int period_ms = 8;
+  // struct can_frame frame;	// The incoming frame
   uint8_t localAddress = 42;
-  uint16_t syncCounter = 0;
-  char rfifopath[PATH_MAX + 1] = {0x00};  // We will open the read FIFO here.
-  char wfifopath[PATH_MAX + 1] = {0x00};  // We will open the write FIFO here.
-  int rfdfifo = -1;
-  int wfdfifo = -1;
-  uint64_t timer;
-
-  sprintf(rfifopath,"%sr", argv[1]);
-  sprintf(wfifopath,"%sw", argv[1]);
-
+  
   printf("MilCAN Implementation V0.0.2\n\n");
 
   // check argument count
@@ -256,41 +235,31 @@ int main(int argc, char *argv[])
   // // open a connection to a host:port pair
   // sckfd = tcpopen(argv[1], atoi(argv[2]));
 
-  // Open the FIFOs
-  LOGI(TAG, "Opening FIFO (%s)...\n", rfifopath);
-  rfdfifo = open(rfifopath, O_RDONLY | O_NONBLOCK);
-  if(rfdfifo < 0) {
-    LOGE(TAG, "unable to open FIFO (%s) for Read. Error \n", rfifopath);
-    exit(EXIT_FAILURE);
-  }
-
-  LOGI(TAG, "Opening FIFO (%s)...\n", wfifopath);
-  wfdfifo = open(wfifopath, O_WRONLY | O_NONBLOCK);
-  if(wfdfifo < 0) {
-    LOGE(TAG, "unable to open FIFO (%s) for Write. Error \n", wfifopath);
+  struct milcan_a* interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, CAN_INTERFACE_GSUSB_FIFO, argv[1], 0);
+  if(interface == NULL) {
     exit(EXIT_FAILURE);
   }
 
   // create a new kernel event queue
   if ((kq = kqueue()) == -1) {
     LOGE(TAG, "Unable to create kqueue\n");
+    milcan_close(interface);
     exit(EXIT_FAILURE);
   }
 
   // initialise kevent structures
   // EV_SET(&chlist[0], sckfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
   // EV_SET(&chlist[1], fileno(stdin), EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-  EV_SET(&chlist[0], rfdfifo, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+  EV_SET(&chlist[0], interface->rfdfifo, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
   // EV_SET(&chlist[1], TIMER_FD, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, period_ms, 0);
   nev = kevent(kq, chlist, KQUEUE_CH_SIZE, NULL, 0, NULL);
   if (nev < 0) {
     LOGE(TAG, "Unable to listen to kqueue\n");
+    milcan_close(interface);
     exit(EXIT_FAILURE);
   }
 
   printf("Starting loop...\n");
-  // uint32_t count = 0;
-  timer = nanos() + SYNC_PERIOD_NS;  // 8ms
   struct timespec zero_ts = {
     .tv_sec = 0,
     .tv_nsec = 0
@@ -299,22 +268,26 @@ int main(int argc, char *argv[])
   // loop forever
   for (;;) {
     // nev = kevent(kq, NULL, 0, evlist, KQUEUE_EV_SIZE, NULL);  // Blocking
-    checkTimer(&timer, wfdfifo, localAddress, &syncCounter);
+    checkSync(interface);
+    // checkTimer(&timer, interface->wfdfifo, localAddress, &syncCounter);
     nev = kevent(kq, NULL, 0, evlist, KQUEUE_EV_SIZE, &zero_ts);  // Non-blocking
 
     if (nev < 0) {
       LOGE(TAG, "%s() Unable to listen to kqueue\n", __FUNCTION__);
+      milcan_close(interface);
       exit(EXIT_FAILURE);
     }
     else if (nev > 0) {
       for (i = 0; i < nev; i++) {
         if (evlist[i].flags & EV_EOF) {
           LOGE(TAG, "Read direction of socket has shutdown\n");
+          milcan_close(interface);
           exit(EXIT_FAILURE);
         }
 
         if (evlist[i].flags & EV_ERROR) {                /* report errors */
           LOGE(TAG, "EV_ERROR: %s\n", strerror(evlist[i].data));
+          milcan_close(interface);
           exit(EXIT_FAILURE);
         }
   
@@ -333,27 +306,29 @@ int main(int argc, char *argv[])
 
         //   print_can_frame(" PIPE IN", &frame, 0, "");
         // } else 
-        if (evlist[i].ident == rfdfifo) {                  /* we have data from the host */
-          int ret;
-          int i = 0;
-          int toread = (int)(evlist[i].data);
-          do {
-            i++;
-            ret = read(rfdfifo, &frame, sizeof(struct can_frame));
-            toread -= ret;
-            if(ret != sizeof(struct can_frame)) {
-              LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
-            } else {
-              print_can_frame(TAG, &frame, 0, "PIPE IN");
-            }
-          } while (toread >= sizeof(struct can_frame));
+        if (evlist[i].ident == interface->rfdfifo) {                  /* we have data from the host */
+          // int ret;
+          // int i = 0;
+          // int toread = (int)(evlist[i].data);
+          // do {
+          //   i++;
+          //   ret = read(interface->rfdfifo, &frame, sizeof(struct can_frame));
+          //   toread -= ret;
+          //   if(ret != sizeof(struct can_frame)) {
+          //     LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
+          //   } else {
+          //     print_can_frame(TAG, &frame, 0, "PIPE IN");
+          //   }
+          // } while (toread >= sizeof(struct can_frame));
 
+          milcan_recv(interface, (int)(evlist[i].data));
         }
       }
     }
   }
 
   close(kq);
+  milcan_close(interface);
   return EXIT_SUCCESS;
 }
 

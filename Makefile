@@ -1,12 +1,12 @@
-commonfiles := milcan.c milcan.h timestamp.c timestamp.h logs.h ../BSD-USB-to-CAN/usb2can.h
+commonfiles := milcan.c milcan.h interfaces.c interfaces.h timestamp.c timestamp.h logs.h ../BSD-USB-to-CAN/usb2can.h
 
 all: milcan milcan_hy
 
 milcan: $(commonfiles)
-	cc -g -O2 -Wall -mabi=purecap -cheri-bounds=subobject-safe -lusb -lssl -o milcan milcan.c timestamp.c
+	cc -g -O2 -Wall -mabi=purecap -cheri-bounds=subobject-safe -lusb -lssl -o milcan milcan.c timestamp.c interfaces.c
 
 milcan_hy: $(commonfiles)
-	cc -g -O2 -Wall -mabi=aapcs -cheri-bounds=subobject-safe -lusb -lssl -o milcan_hy milcan.c timestamp.c
+	cc -g -O2 -Wall -mabi=aapcs -cheri-bounds=subobject-safe -lusb -lssl -o milcan_hy milcan.c timestamp.c interfaces.c
 
 .PHONY: clean
 

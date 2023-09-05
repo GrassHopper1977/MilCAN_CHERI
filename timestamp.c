@@ -1,4 +1,6 @@
 // Returns timestamps for logging.
+#ifndef __TIMESTAMP_H___
+#define __TIMESTAMP_H___
 
 #include <inttypes.h>
 #include <sys/time.h>
@@ -14,10 +16,10 @@
 /// Convert seconds to microseconds
 #define SEC_TO_US(sec) ((sec)*1000000)
 /// Convert seconds to nanoseconds
-#define SEC_TO_NS(sec) ((sec)*1000000000)
+#define SEC_TO_NS(sec) ((sec)*1000000000L)
 
 /// Convert nanoseconds to seconds
-#define NS_TO_SEC(ns)   ((ns)/1000000000)
+#define NS_TO_SEC(ns)   ((ns)/1000000000L)
 /// Convert nanoseconds to milliseconds
 #define NS_TO_MS(ns)    ((ns)/1000000)
 /// Convert nanoseconds to microseconds
@@ -46,3 +48,5 @@ uint64_t nanos() {
     uint64_t ns = SEC_TO_NS((uint64_t)ts.tv_sec) + (uint64_t)ts.tv_nsec;
     return ns;
 }
+
+#endif  // __TIMESTAMP_H___
