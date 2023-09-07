@@ -26,8 +26,9 @@
 
 #include "../BSD-USB-to-CAN/usb2can.h"
 #define LOG_LEVEL 3
-#include "logs.h"
-#include "timestamp.h"
+#include "utils/logs.h"
+#include "utils/timestamp.h"
+#include "utils/priorities.h"
 #include "milcan.h"
 #include "interfaces.h"
 
@@ -43,6 +44,8 @@ int sendcantosck(int fd, struct milcan_frame * frame);
 #define TIMER_FD  1234
 
 #define TAG "MilCAN"
+
+struct milcan_a* interface = NULL;
 
 void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, const char *format, ...) {
   FILE * fd = stdout;
@@ -89,6 +92,7 @@ void sigint_handler(int sig) {
   fflush(stdout);
   fflush(stderr);
   if(sig == SIGINT) {
+    milcan_close(interface);
     // Make sure the signal is passed down the line correctly.
     signal(SIGINT, SIG_DFL);
     kill(getpid(), SIGINT);
@@ -104,111 +108,42 @@ void checkSync(struct milcan_a* interface) {
   // LOGI(TAG, "                 now: %lu", now);
   // LOGI(TAG, "interface->syncTimer: %lu", interface->syncTimer);
   
-  // if(now >= interface->syncTimer) {
-  if(now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) {
-    interface->syncTimer = now + interface->sync_time_ns;  // Next period from now.
-    // interface->syncTimer += interface->sync_time_ns; // Next period from when we should've been.
+  if((interface->current_sync_master == interface->sourceAddress) // We are Sync Master
+    || (((interface->options & MILCAN_A_OPTION_SYNC_MASTER) == MILCAN_A_OPTION_SYNC_MASTER) && 
+    ((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)))) { // Or we want to be sync Master
+    // if(now >= interface->syncTimer) {
+    if(now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) {
+      interface->syncTimer = now + interface->sync_time_ns;  // Next period from now.
+      // interface->syncTimer += interface->sync_time_ns; // Next period from when we should've been.
 
-    // MilCAN Sync Frame
-    interface->sync++;
-    interface->sync &= 0x000003FF;
-    struct milcan_frame frame = MILCAN_MAKE_SYNC(interface->sourceAddress, interface->sync);
+      // MilCAN Sync Frame
+      interface->sync++;
+      interface->sync &= 0x000003FF;
+      struct milcan_frame frame = MILCAN_MAKE_SYNC(interface->sourceAddress, interface->sync);
 
-    milcan_send(interface, &frame);
-  }
-}
+      milcan_send(interface, &frame);
+    }
+  } else if(((interface->options & MILCAN_A_OPTION_SYNC_MASTER) == MILCAN_A_OPTION_SYNC_MASTER) && (interface->sourceAddress < interface->current_sync_master)) {  // We are not Sync Master but we have higher priority than the current Sync Master.
+    if(now >= (interface->syncTimer - SYNC_PERIOD_20PC(interface->sync_time_ns))) { // We can interrupt at 0.8 of PTU if we have a higher priority.
+      interface->syncTimer = now + interface->sync_time_ns;  // Next period from now.
+      // interface->syncTimer += interface->sync_time_ns; // Next period from when we should've been.
 
+      // MilCAN Sync Frame
+      interface->sync++;
+      interface->sync &= 0x000003FF;
+      struct milcan_frame frame = MILCAN_MAKE_SYNC(interface->sourceAddress, interface->sync);
 
-void displayRTpriority() {
-  // Get the current real time priority
-  struct rtprio rtdata;
-  LOGI(TAG, "%s(): Getting Real Time Priority settings.\n", __FUNCTION__);
-  int ret = rtprio(RTP_LOOKUP, 0, &rtdata);
-  if(ret < 0) {
-    switch(errno) {
-      default:
-        LOGE(TAG, "%s(): ERROR rtprio returned unknown error (%i)\n", __FUNCTION__, errno);
-        break;
-      case EFAULT:
-        LOGE(TAG, "%s(): EFAULT Pointer to struct rtprio is invalid.\n", __FUNCTION__);
-        break;
-      case EINVAL:
-        LOGE(TAG, "%s(): EINVAL The specified priocess was out of range.\n", __FUNCTION__);
-        break;
-      case EPERM:
-        LOGE(TAG, "%s(): EPERM The calling thread is not allowed to set the priority. Try running as SU or root.\n", __FUNCTION__);
-        break;
-      case ESRCH:
-        LOGE(TAG, "%s(): ESRCH The specified process or thread could not be found.\n", __FUNCTION__);
-        break;
+      milcan_send(interface, &frame);
     }
   } else {
-    switch(rtdata.type) {
-      case RTP_PRIO_REALTIME:
-        LOGI(TAG, "%s(): INFO Real Time Priority type is: RTP_PRIO_REALTIME\n", __FUNCTION__);
-        break;
-      case RTP_PRIO_NORMAL:
-        LOGI(TAG, "%s(): INFO Real Time Priority type is: RTP_PRIO_NORMAL\n", __FUNCTION__);
-        break;
-      case RTP_PRIO_IDLE:
-        LOGI(TAG, "%s(): INFO Real Time Priority type is: RTP_PRIO_IDLE\n", __FUNCTION__);
-        break;
-      default:
-        LOGI(TAG, "%s(): INFO Real Time Priority type is: %u\n", __FUNCTION__, rtdata.type);
-        break;
+    // We are not the Sync Master but we haven't had a Sync Message for 8 PTUs
+    if(now >= (interface->syncTimer + (interface->sync_time_ns * 7))) {
+      interface->current_sync_master = 0;
+      interface->mode = MILCAN_A_MODE_PRE_OPERATIONAL;
     }
-    LOGI(TAG, "%s(): INFO Real Time Priority priority is: %u\n", __FUNCTION__, rtdata.prio);
   }
 }
 
-int setRTpriority(u_short prio) {
-  struct rtprio rtdata;
-
-  // Set the real time priority here
-  LOGI(TAG, "%s(): Setting the Real Time Priority type to RTP_PRIO_REALTIME and priority to %u\n", __FUNCTION__, prio);
-  rtdata.type = RTP_PRIO_REALTIME;  // Real Time priority
-  // rtdata.type = RTP_PRIO_NORMAL;  // Normal
-  // rtdata.type = RTP_PRIO_IDLE;  // Low priority
-  rtdata.prio = prio;  // 0 = highest priority, 31 = lowest.
-  int ret = rtprio(RTP_SET, 0, &rtdata);
-  if(ret < 0) {
-    switch(errno) {
-      default:
-        LOGE(TAG, "%s(): ERROR rtprio returned unknown error (%i)\n", __FUNCTION__, errno);
-        break;
-      case EFAULT:
-        LOGE(TAG, "%s(): EFAULT Pointer to struct rtprio is invalid.\n", __FUNCTION__);
-        break;
-      case EINVAL:
-        LOGE(TAG, "%s(): EINVAL The specified priocess was out of range.\n", __FUNCTION__);
-        break;
-      case EPERM:
-        LOGE(TAG, "%s(): EPERM The calling thread is not allowed to set the priority. Try running as SU or root.\n", __FUNCTION__);
-        break;
-      case ESRCH:
-        LOGE(TAG, "%s(): ESRCH The specified process or thread could not be found.\n", __FUNCTION__);
-        break;
-    }
-  } else {
-    switch(rtdata.type) {
-      case RTP_PRIO_REALTIME:
-        LOGI(TAG, "%s(): Real Time Priority type is: RTP_PRIO_REALTIME\n", __FUNCTION__);
-        break;
-      case RTP_PRIO_NORMAL:
-        LOGI(TAG, "%s(): Real Time Priority type is: RTP_PRIO_NORMAL\n", __FUNCTION__);
-        break;
-      case RTP_PRIO_IDLE:
-        LOGI(TAG, "%s(): Real Time Priority type is: RTP_PRIO_IDLE\n", __FUNCTION__);
-        break;
-      default:
-        LOGI(TAG, "%s(): Real Time Priority type is: %u\n", __FUNCTION__, rtdata.type);
-        break;
-    }
-    LOGI(TAG, "%s(): Real Time Priority priority is: %u\n", __FUNCTION__, rtdata.prio);
-  }
-  displayRTpriority();
-  return ret;
-}
 
 int main(int argc, char *argv[])
 {
@@ -217,44 +152,43 @@ int main(int argc, char *argv[])
 
   struct kevent chlist[KQUEUE_CH_SIZE]; // events we want to monitor
   struct kevent evlist[KQUEUE_EV_SIZE]; // events that were triggered
-  // char buf[BUFSIZE]; 
   // int sckfd;
   int kq, nev, i;
-  // struct can_frame frame;	// The incoming frame
   uint8_t localAddress = 42;
   
   printf("MilCAN Implementation V0.0.2\n\n");
+
+  displayRTpriority();
+  setRTpriority(0);
 
   // check argument count
   if (argc != 2) {
     fprintf(stderr, "usage: %s pipe (e.g. /tmp/can0.0 Note: Omit the \"r\" or \"w\" on the end of the filename)\n", argv[0]);
     exit(EXIT_FAILURE);
   }
-  LOGI(TAG, "starting...\n");
+  LOGI(TAG, "starting...");
 
   // // open a connection to a host:port pair
   // sckfd = tcpopen(argv[1], atoi(argv[2]));
 
-  struct milcan_a* interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, CAN_INTERFACE_GSUSB_FIFO, argv[1], 0);
+  interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, CAN_INTERFACE_GSUSB_FIFO, argv[1], 0, MILCAN_A_OPTION_SYNC_MASTER);
   if(interface == NULL) {
     exit(EXIT_FAILURE);
   }
 
   // create a new kernel event queue
   if ((kq = kqueue()) == -1) {
-    LOGE(TAG, "Unable to create kqueue\n");
+    LOGE(TAG, "Unable to create kqueue.");
     milcan_close(interface);
     exit(EXIT_FAILURE);
   }
 
   // initialise kevent structures
   // EV_SET(&chlist[0], sckfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-  // EV_SET(&chlist[1], fileno(stdin), EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
   EV_SET(&chlist[0], interface->rfdfifo, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-  // EV_SET(&chlist[1], TIMER_FD, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, period_ms, 0);
   nev = kevent(kq, chlist, KQUEUE_CH_SIZE, NULL, 0, NULL);
   if (nev < 0) {
-    LOGE(TAG, "Unable to listen to kqueue\n");
+    LOGE(TAG, "Unable to listen to kqueue.");
     milcan_close(interface);
     exit(EXIT_FAILURE);
   }
@@ -273,54 +207,25 @@ int main(int argc, char *argv[])
     nev = kevent(kq, NULL, 0, evlist, KQUEUE_EV_SIZE, &zero_ts);  // Non-blocking
 
     if (nev < 0) {
-      LOGE(TAG, "%s() Unable to listen to kqueue\n", __FUNCTION__);
+      LOGE(TAG, "%s() Unable to listen to kqueue.", __FUNCTION__);
       milcan_close(interface);
       exit(EXIT_FAILURE);
     }
     else if (nev > 0) {
       for (i = 0; i < nev; i++) {
         if (evlist[i].flags & EV_EOF) {
-          LOGE(TAG, "Read direction of socket has shutdown\n");
+          LOGE(TAG, "Read direction of socket has shutdown.");
           milcan_close(interface);
           exit(EXIT_FAILURE);
         }
 
         if (evlist[i].flags & EV_ERROR) {                /* report errors */
-          LOGE(TAG, "EV_ERROR: %s\n", strerror(evlist[i].data));
+          LOGE(TAG, "EV_ERROR: %s.", strerror(evlist[i].data));
           milcan_close(interface);
           exit(EXIT_FAILURE);
         }
   
-        // if(evlist[i].ident == TIMER_FD) {
-        //   struct milcan_frame syncframe = MILCAN_MAKE_SYNC(localAddress, syncCounter);
-        //   sendcantosck(sckfd, &syncframe.frame);
-        //   syncCounter++;
-        // } else 
-        // if (evlist[i].ident == sckfd) {                  /* we have data from the host */
-        //   memset(buf, 0, BUFSIZE);
-        //   int i = recv(sckfd, &frame, sizeof(frame), 0);
-        //   if (i < 0){                /* report errors */
-        //     LOGE(TAG, "recv()\n");
-        //     exit(EXIT_FAILURE);
-        //   }
-
-        //   print_can_frame(" PIPE IN", &frame, 0, "");
-        // } else 
         if (evlist[i].ident == interface->rfdfifo) {                  /* we have data from the host */
-          // int ret;
-          // int i = 0;
-          // int toread = (int)(evlist[i].data);
-          // do {
-          //   i++;
-          //   ret = read(interface->rfdfifo, &frame, sizeof(struct can_frame));
-          //   toread -= ret;
-          //   if(ret != sizeof(struct can_frame)) {
-          //     LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
-          //   } else {
-          //     print_can_frame(TAG, &frame, 0, "PIPE IN");
-          //   }
-          // } while (toread >= sizeof(struct can_frame));
-
           milcan_recv(interface, (int)(evlist[i].data));
         }
       }

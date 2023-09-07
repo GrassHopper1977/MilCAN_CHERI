@@ -22,8 +22,8 @@
 #include <limits.h>
 #include "interfaces.h"
 #define LOG_LEVEL 3
-#include "logs.h"
-#include "timestamp.h"
+#include "utils/logs.h"
+#include "utils/timestamp.h"
 
 #define TAG "Interfaces"
 
@@ -71,7 +71,7 @@ void print_milcan_frame(const char* tag, struct milcan_frame *frame, const char 
 }
 
 /// @brief Opens a CAN interface. We're trying to use the same interface functions for all the differnt types.
-struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, char* address, uint16_t port) {
+struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, char* address, uint16_t port, uint16_t options) {
     char rfifopath[PATH_MAX + 1] = {0x00};  // We will open the read FIFO here (if used).
     char wfifopath[PATH_MAX + 1] = {0x00};  // We will open the write FIFO here (if used).
     struct milcan_a* interface = calloc(1, sizeof(struct milcan_a));
@@ -85,12 +85,16 @@ struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourc
         interface->syncTimer = nanos();
         interface->sync_freq_hz = sync_freq_hz;
         interface->sync_time_ns = (uint64_t) (1000000000L/sync_freq_hz);
+        interface->current_sync_master = 0;
         interface->rfdfifo = -1;
         interface->wfdfifo = -1;
+        interface->options = options;
         interface->mode = MILCAN_A_MODE_POWER_OFF;
 
         LOGI(TAG, "Sync Frame Frequency requested %u", interface->sync_freq_hz);
         LOGI(TAG, "Sync Frame period calculated %lu", interface->sync_time_ns);
+
+        milcan_display_mode(interface);
  
         switch (can_interface_type)
         {
@@ -117,6 +121,7 @@ struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourc
 
             // Connection is open so start the MILCAN process here.
             interface->mode = MILCAN_A_MODE_PRE_OPERATIONAL;
+            milcan_display_mode(interface);
             break;
         
         default:
@@ -173,9 +178,52 @@ int milcan_recv(struct milcan_a* interface, int toRead) {
             LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
         } else {
             print_milcan_frame(TAG, &frame, "PIPE IN");
+            if((frame.frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
+                // We've recieved a sync frame!
+                if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
+                    interface->mode = MILCAN_A_MODE_OPERATIONAL;
+                    interface->current_sync_master = (uint8_t) (frame.frame.can_id & MILCAN_ID_SOURCE_MASK);
+                    milcan_display_mode(interface);
+                    if(interface->current_sync_master != interface->sourceAddress) {    // It's not from us.
+                        interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+                    } else {
+                        LOGI(TAG, "We are now Sync Master!");
+                    }
+                } else if((frame.frame.can_id & MILCAN_ID_SOURCE_MASK) < interface->current_sync_master) {
+                    // This device has a higher priority than us so it should be the Sync Master instead which ever device currently has it.
+                    if(((uint8_t)(frame.frame.can_id & MILCAN_ID_SOURCE_MASK)) != interface->sourceAddress) {    // It's not from us.
+                        if(interface->current_sync_master == interface->sourceAddress) {
+                            LOGI(TAG, "We are no longer Sync Master.");
+                        }
+                        interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+                    } else {
+                        LOGI(TAG, "We are now Sync Master!");
+                    }
+                    interface->current_sync_master = (uint8_t) (frame.frame.can_id & MILCAN_ID_SOURCE_MASK);
+                }
+            }
         }
     } while (toRead >= sizeof(struct can_frame));
 
     return 0;
 }
 
+void milcan_display_mode(struct milcan_a* interface) {
+    switch(interface->mode) {
+    case MILCAN_A_MODE_POWER_OFF:
+        LOGI(TAG, "Mode: Power Off");
+        break;
+    case MILCAN_A_MODE_PRE_OPERATIONAL:
+        LOGI(TAG, "Mode: Pre Operational");
+        break;
+    case MILCAN_A_MODE_OPERATIONAL:
+        LOGI(TAG, "Mode: Operational");
+        break;
+    case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
+        LOGI(TAG, "Mode: System Configuration");
+        break;
+    default:
+        LOGE(TAG, "Mode: Unrecognised (%u)", interface->mode);
+        break;
+    }
+}
