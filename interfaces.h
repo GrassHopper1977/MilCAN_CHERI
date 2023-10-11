@@ -4,9 +4,15 @@
 #include <inttypes.h>
 #include "milcan.h"
 
-#define CAN_INTERFACE_SOCKET_CAN    0   // Not supported yet
-#define CAN_INTERFACE_GSUSB_FIFO    1   // Our BSD-USB-to-CAN implementation over FIFOs
-#define CAN_INTERFACE_GSUSB_SOCK    2   // Our BSD-USB-to-CAN implementation over sockets
+#define MILCAN_OK                   0   // Generic error
+#define MILCAN_ERROR                -1  // Generic error
+#define MILCAN_ERROR_FATAL          -2  // Generic fatal error
+
+#define CAN_INTERFACE_NONE          0   // Basically, NULL
+#define CAN_INTERFACE_SOCKET_CAN    1   // Not supported yet
+#define CAN_INTERFACE_GSUSB_FIFO    2   // Our BSD-USB-to-CAN implementation over FIFOs
+#define CAN_INTERFACE_GSUSB_SOCK    3   // Our BSD-USB-to-CAN implementation over sockets
+#define CAN_INTERFACE_CANDO         4   // The CANdo module from netronics
 
 // Bit Rates as defined in MWG-MILA-001 Rev 3 Section 2.4.1 (Page 13 of 79)
 #define MILCAN_A_250K   0
@@ -49,6 +55,6 @@ struct milcan_a {
 extern struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, char* address, uint16_t port, uint16_t options);
 extern struct milcan_a* milcan_close(struct milcan_a* milcan_a);
 extern ssize_t milcan_send(struct milcan_a* interface, struct milcan_frame * frame);
-extern int milcan_recv(struct milcan_a* interface, int toRead);
+extern int milcan_recv(struct milcan_a* interface);
 extern void milcan_display_mode(struct milcan_a* interface);
 #endif  // __INTERFACES_H__
