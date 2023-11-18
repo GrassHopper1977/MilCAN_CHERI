@@ -3,30 +3,18 @@
 #define __INTERFACES_H__
 #include <inttypes.h>
 #include "milcan.h"
+#include "gsusb.h"
 
-#define MILCAN_OK                   0   // Generic error
-#define MILCAN_ERROR                -1  // Generic error
-#define MILCAN_ERROR_FATAL          -2  // Generic fatal error
+#define MAX_BITS_PER_FRAME  (143) // The maximum with bit stuffing is 140 then 3 bits of interframe spacing.
 
-#define CAN_INTERFACE_NONE          0   // Basically, NULL
-#define CAN_INTERFACE_SOCKET_CAN    1   // Not supported yet
-#define CAN_INTERFACE_GSUSB_FIFO    2   // Our BSD-USB-to-CAN implementation over FIFOs
-#define CAN_INTERFACE_GSUSB_SOCK    3   // Our BSD-USB-to-CAN implementation over sockets
-#define CAN_INTERFACE_CANDO         4   // The CANdo module from netronics
+#define RX_BUFFER_SIZE  (30)  // How big our receive buffer is.
 
-// Bit Rates as defined in MWG-MILA-001 Rev 3 Section 2.4.1 (Page 13 of 79)
-#define MILCAN_A_250K   0
-#define MILCAN_A_500K   1
-#define MILCAN_A_1M     2
-
-// Sync Frame Frequencies as defined in MWG-MILA-001 Rev 3 Section 3.2.5.3 (Page 19 of 79)
-// These are recommended frequnecies so we shoudl allow for these to be changed.
-#define MILCAN_A_250K_DEFAULT_SYNC_HZ   (512)
-#define MILCAN_A_500K_DEFAULT_SYNC_HZ   (128)
-#define MILCAN_A_1M_DEFAULT_SYNC_HZ     (64)
 #define MILCAN_A_SYNC_COUNT_MASK        (0x03FF)    // 0 to 1023
+#define SYNC_PERIOD_0_5PC(a) (uint64_t)((a) * 0.005)
 #define SYNC_PERIOD_1PC(a) (uint64_t)((a) * 0.01)
 #define SYNC_PERIOD_20PC(a) (uint64_t)((a) * 0.2)
+#define SYNC_PERIOD_80PC(a) (uint64_t)((a) * 0.8)
+// #define SYNC_SLAVE_TIMEOUT(ptu_len, )
 
 // System modes as defined in MWG-MILA-001 Rev 3 Section 4.2 (Page 37 of 79)
 #define MILCAN_A_MODE_POWER_OFF             (0) // System is off
@@ -34,27 +22,40 @@
 #define MILCAN_A_MODE_OPERATIONAL           (2) // Normal usage
 #define MILCAN_A_MODE_SYSTEM_CONFIGURATION  (3) // Config Messages only
 
-#define MILCAN_A_OPTION_SYNC_MASTER     (0x0001)    // This device can be a Sync Master
+struct milcan_rx_q {
+  pthread_mutex_t rxBufferMutex;  // Mutex to control threaded access to read data buffer.
+  struct milcan_frame buffer[RX_BUFFER_SIZE]; // The input buffer.
+  uint16_t write_offset;
+};
 
 struct milcan_a {
-    uint8_t sourceAddress;      // This device's physical network address
-    uint8_t can_interface_type; // The CAN Interface type e.g. CAN_INTERFACE_GSUSB_FIFO
-    uint8_t speed;              // The MilCAN speed MILCAN_A_250K, MILCAN_A_500K or, MILCAN_A_1M
-    uint16_t sync;              // The Sync Slot Counter - this is masked with MILCAN_A_SYNC_COUNT_MASK after any changes
-    uint64_t syncTimer;         // Used to calculate when the next sync frame is due to be sent.
-    uint16_t sync_freq_hz;      // The frequency to send the sync frame
-    uint64_t sync_time_ns;      // The period to send the sync frame in ns - this is also called the PTU (Primary Time Unit)
-    uint8_t current_sync_master;    // Who is the current Sync Master?
-    int rfdfifo;                // Read FIFO
-    int wfdfifo;                // Write FIFO
-    int mode;                   // The current MILCAN_A_MODE
-    uint16_t options;           // The various MILCAN_A_OPTION
+  uint8_t sourceAddress;      // This device's physical network address
+  uint8_t can_interface_type; // The CAN Interface type e.g. CAN_INTERFACE_GSUSB_FIFO
+  uint8_t speed;              // The MilCAN speed MILCAN_A_250K, MILCAN_A_500K or, MILCAN_A_1M
+  uint16_t sync;              // The Sync Slot Counter - this is masked with MILCAN_A_SYNC_COUNT_MASK after any changes
+  uint64_t syncTimer;         // Used to calculate when the next sync frame is due to be sent.
+  uint16_t sync_freq_hz;      // The frequency to send the sync frame
+  uint64_t sync_time_ns;      // The period to send the sync frame in ns - this is also called the PTU (Primary Time Unit)
+  uint64_t sync_slave_time_ns;  // The sync slave time in ns. This is how long we have to wait without a sync before we attempt to take over a sync master.
+  uint8_t current_sync_master;    // Who is the current Sync Master?
+  int rfdfifo;                // Read FIFO
+  int wfdfifo;                // Write FIFO
+  int mode;                   // The current MILCAN_A_MODE
+  uint16_t options;           // The various MILCAN_A_OPTION
+  // GSUSB data
+  struct gsusb_ctx ctx;
+  pthread_t rxThreadId; // Read thread ID.
+  uint8_t eventRunFlag; // Used to close the therad when exiting.
+  struct milcan_rx_q rx; // The input buffer.
 };
 
 // Function definitions
-extern struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, char* address, uint16_t port, uint16_t options);
-extern struct milcan_a* milcan_close(struct milcan_a* milcan_a);
-extern ssize_t milcan_send(struct milcan_a* interface, struct milcan_frame * frame);
-extern int milcan_recv(struct milcan_a* interface);
-extern void milcan_display_mode(struct milcan_a* interface);
+struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options);
+struct milcan_a* interface_close(struct milcan_a* milcan_a);
+int interface_send(struct milcan_a* interface, struct milcan_frame * frame);
+void interface_display_mode(struct milcan_a* interface);
+int interface_recv(struct milcan_a* interface, struct milcan_frame *frame);
+int interface_handle_rx(struct milcan_a* interface);
+int interface_q_tx(struct milcan_a* interface, struct milcan_frame *frame);
+
 #endif  // __INTERFACES_H__

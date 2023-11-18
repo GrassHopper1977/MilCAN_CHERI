@@ -1,2 +1,0 @@
-cc -g -O2 -Wall -mabi=aapcs -cheri-bounds=subobject-safe -lusb -lssl -o milcan_hy milcan.c
-cc -g -O2 -Wall -mabi=purecap -cheri-bounds=subobject-safe -lusb -lssl -o milcan milcan.c

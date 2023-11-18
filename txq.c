@@ -5,9 +5,8 @@
 //#include <unistd.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "../BSD-USB-to-CAN/usb2can.h"
 #include "milcan.h"
-#include "timestamp.h"
+#include "utils/timestamp.h"
 // #include "logs.h"
 
 #include <stdio.h>      /* Standard input/output definitions */

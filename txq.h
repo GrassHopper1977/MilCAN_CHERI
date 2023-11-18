@@ -3,7 +3,7 @@
 #ifndef __TXQ_H__
 #define __TXQ_H__
 
-#include "../BSD-USB-to-CAN/usb2can.h"
+#include "milcan.h"
 
 /// @brief Adds a CAN frame to the output buffer. They will be added taking into account the message priority. Invalid messages will be discarded.
 /// @param frame The CAN frame to transmit.

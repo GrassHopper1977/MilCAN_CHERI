@@ -656,11 +656,37 @@ void CANdoVersion(void)
 //   }
 // }
 
+#define CAN_ERR_TX_TIMEOUT 0x00000001U   // TX timeout (by netdevice driver)
+#define CAN_ERR_LOSTARB	   0x00000002U   // lost arbitration    / data[0]   
+#define CAN_ERR_CRTL	   0x00000004U   // controller problems / data[1]   
+#define CAN_ERR_PROT	   0x00000008U   // protocol violations / data[2..3]
+#define CAN_ERR_TRX		   0x00000010U   // transceiver status  / data[4]
+#define CAN_ERR_ACK		   0x00000020U   // received no ACK on transmission
+#define CAN_ERR_BUSOFF	   0x00000040U   // bus off
+#define CAN_ERR_BUSERROR   0x00000080U   // bus error (may flood!)
+#define CAN_ERR_RESTARTED  0x00000100U   // controller restarted
+#define CAN_ERR_CNT  	   0x00000200U   // error counts (data[6] = Tx error counter, data[7] = Rx error counter)
+
+
 // Fills the Rx buffer
 int CANdoRx() {
   if (CANdoReceive(&CANdoUSB, &CANdoCANBuffer, &CANdoStatus) != CANDO_SUCCESS)
     return FALSE;
   return TRUE;
+  switch(CANdoReceive(&CANdoUSB, &CANdoCANBuffer, &CANdoStatus)) {
+    case CANDO_SUCCESS:
+      return MILCAN_OK;
+    case CANDO_CONNECTION_CLOSED:
+      return MILCAN_ERROR_CONN_CLOSED;
+    default:
+    case CANDO_READ_ERROR:
+    case CANDO_BUFFER_OVERFLOW:
+    case CANDO_RX_OVERRUN:
+    case CANDO_RX_TYPE_UNKNOWN:
+    case CANDO_RX_CRC_ERROR:
+    case CANDO_RX_DECODE_ERROR:
+      return MILCAN_ERROR;
+  }
 }
 
 // Empties the Rx buffer.

@@ -1,8 +1,19 @@
 // milcan.h
 #ifndef __MILCAN_H__
 #define __MILCAN_H__
+#include "can.h"
 
-#include "../BSD-USB-to-CAN/usb2can.h"
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#define MILCAN_OK                   0
+#define MILCAN_ERROR                -1
+#define MILCAN_ERROR_CONN_CLOSED    -2
 
 #define MILCAN_ID_MASK              0x1FFFFFFF
 #define MILCAN_ID_PRIORITY_MASK     0x1C000000
@@ -192,5 +203,33 @@ struct milcan_frame {
         .mortal = 0\
     }
 
+#define MILCAN_OK                   0   // Generic error
+#define MILCAN_ERROR                -1  // Generic error
+#define MILCAN_ERROR_FATAL          -2  // Generic fatal error
+
+#define CAN_INTERFACE_NONE          0   // Basically, NULL
+#define CAN_INTERFACE_SOCKET_CAN    1   // Not supported yet
+#define CAN_INTERFACE_CANDO         2   // The CANdo module from netronics
+#define CAN_INTERFACE_GSUSB_SO      3   // Our GSUSB (including candleLight) Shared Object implementation.
+
+
+// Sync Frame Frequencies as defined in MWG-MILA-001 Rev 3 Section 3.2.5.3 (Page 19 of 79)
+// These are recommended frequnecies so we should allow for these to be changed.
+#define MILCAN_A_250K_DEFAULT_SYNC_HZ   (512)
+#define MILCAN_A_500K_DEFAULT_SYNC_HZ   (128)
+#define MILCAN_A_1M_DEFAULT_SYNC_HZ     (64)
+
+// Bit Rates as defined in MWG-MILA-001 Rev 3 Section 2.4.1 (Page 13 of 79)
+#define MILCAN_A_250K   0
+#define MILCAN_A_500K   1
+#define MILCAN_A_1M     2
+
+// MILCAN options
+#define MILCAN_A_OPTION_SYNC_MASTER     (0x0001)    // This device can be a Sync Master
+
+void * milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options);
+void milcan_close(void * interface);
+int milcan_send(void* interface, struct milcan_frame * frame);
+int milcan_recv(void* interface, struct milcan_frame * frame);
 
 #endif // __MILCAN_H__

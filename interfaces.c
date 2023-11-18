@@ -20,27 +20,16 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <pthread.h>
 #include "interfaces.h"
 #define LOG_LEVEL 3
 #include "utils/logs.h"
 #include "utils/timestamp.h"
 #include "CANdoImport.h"
 #include "CANdoC.h"
+#include "gsusb.h"
 
 #define TAG "Interfaces"
-
-#define KQUEUE_CH_SIZE 	1
-#define KQUEUE_EV_SIZE	10
-struct kevent chlist[KQUEUE_CH_SIZE]; // events we want to monitor
-struct kevent evlist[KQUEUE_EV_SIZE]; // events that were triggered
-struct timespec zero_ts = {
-  .tv_sec = 0,
-  .tv_nsec = 0
-};
-int kq = -1;
-int nev = -1;
-
-
 
 void print_milcan_frame(const char* tag, struct milcan_frame *frame, const char *format, ...) {
   FILE * fd = stdout;
@@ -85,153 +74,187 @@ void print_milcan_frame(const char* tag, struct milcan_frame *frame, const char 
 }
 
 /// @brief Opens a CAN interface. We're trying to use the same interface functions for all the differnt types.
-struct milcan_a* milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, char* address, uint16_t port, uint16_t options) {
-    char rfifopath[PATH_MAX + 1] = {0x00};  // We will open the read FIFO here (if used).
-    char wfifopath[PATH_MAX + 1] = {0x00};  // We will open the write FIFO here (if used).
-    struct milcan_a* interface = calloc(1, sizeof(struct milcan_a));
-    if(interface == NULL) {
-        LOGE(TAG, "Memory shortage.");
-    } else {
-        interface->sourceAddress = sourceAddress;
-        interface->can_interface_type = can_interface_type;
-        interface->speed = speed;
-        interface->sync = 0xFFFF;
-        interface->syncTimer = nanos();
-        interface->sync_freq_hz = sync_freq_hz;
-        interface->sync_time_ns = (uint64_t) (1000000000L/sync_freq_hz);
-        interface->current_sync_master = 0;
-        interface->rfdfifo = -1;
-        interface->wfdfifo = -1;
-        interface->options = options;
-        interface->mode = MILCAN_A_MODE_POWER_OFF;
+struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options) {
+  struct milcan_a* interface = calloc(1, sizeof(struct milcan_a));
+  if(interface == NULL) {
+    LOGE(TAG, "Memory shortage.");
+  } else {
+    interface->sourceAddress = sourceAddress;
+    interface->can_interface_type = can_interface_type;
+    interface->speed = speed;
+    interface->sync = 0xFFFF;
+    interface->syncTimer = nanos();
+    interface->sync_freq_hz = sync_freq_hz;
+    interface->sync_time_ns = (uint64_t) (1000000000L/sync_freq_hz);
+    interface->current_sync_master = 0;
+    interface->rfdfifo = -1;
+    interface->wfdfifo = -1;
+    interface->options = options;
+    interface->mode = MILCAN_A_MODE_POWER_OFF;
+    interface->rxThreadId = NULL;
+    interface->eventRunFlag = FALSE;
+    interface->rx.rxBufferMutex = NULL;
+    interface->rx.write_offset = 0;
 
-        LOGI(TAG, "Sync Frame Frequency requested %u", interface->sync_freq_hz);
-        LOGI(TAG, "Sync Frame period calculated %lu", interface->sync_time_ns);
-
-        milcan_display_mode(interface);
- 
-        switch (can_interface_type)
-        {
-        case CAN_INTERFACE_GSUSB_FIFO:
-            sprintf(rfifopath,"%sr", address);
-            sprintf(wfifopath,"%sw", address);
-
-            // Open the FIFOs
-            LOGI(TAG, "Opening FIFO (%s)...", rfifopath);
-            interface->rfdfifo = open(rfifopath, O_RDONLY | O_NONBLOCK);
-            if(interface->rfdfifo < 0) {
-                LOGE(TAG, "unable to open FIFO (%s) for Read. Error", rfifopath);
-                interface = milcan_close(interface);
-                break;
-            }
-
-            LOGI(TAG, "Opening FIFO (%s)...", wfifopath);
-            interface->wfdfifo = open(wfifopath, O_WRONLY | O_NONBLOCK);
-            if(interface->wfdfifo < 0) {
-                LOGE(TAG, "unable to open FIFO (%s) for Write. Error", wfifopath);
-                interface = milcan_close(interface);
-                break;
-            }
-
-            // Connection is open so start the MILCAN process here.
-            interface->mode = MILCAN_A_MODE_PRE_OPERATIONAL;
-            milcan_display_mode(interface);
-            break;
-        case CAN_INTERFACE_CANDO:
-            LOGI(TAG, "Opening CANdo (%u)...", port);
-            unsigned char status = CANdoInitialise();
-            if(status) {
-                CANdoConnect(port);  // Open a connection to a CANdo device
-                if(CANdoUSBStatus()->OpenFlag) {
-                    LOGI(TAG, "CANdo is open.");
-                } else {
-                    LOGE(TAG, "CANdo is not open!");
-                    interface = milcan_close(interface);
-                }
-                if(FALSE == CANdoStart(MILCAN_A_500K)) {  // Set baud rate to 500k
-                    LOGE(TAG, "Unable to set CANdo baud rate!");
-                    interface = milcan_close(interface);
-                }
-            } else {
-                LOGE(TAG, "CANdo API library not found!");
-                interface = milcan_close(interface);
-                break;
-            }
-            break;
-        
-        default:
-            LOGE(TAG, "CAN interface type is unrecognised or unsupported.");
-            break;
-        }
-    }
-
-    return interface;
-}
-
-struct milcan_a* milcan_close(struct milcan_a* interface) {
-    if(interface != NULL) {
-        switch(interface->can_interface_type) {
-            case CAN_INTERFACE_GSUSB_FIFO:
-                LOGI(TAG, "Closing FIFOs...");
-                if(interface->rfdfifo >= 0) {
-                    close(interface->rfdfifo);
-                }
-                if(interface->wfdfifo >= 0) {
-                    close(interface->wfdfifo);
-                }
-                close(kq);
-                break;
-            case CAN_INTERFACE_CANDO:
-                CANdoCloseAndFinalise();
-                break;
-        }
-        LOGI(TAG, "Freeing memory...");
-        free(interface);
-        interface = NULL;
-        LOGI(TAG, "Done.");
-    }
-    return interface;
-}
-
-ssize_t milcan_send(struct milcan_a* interface, struct milcan_frame * frame) {
-    ssize_t ret = -1;
-    uint16_t id;
-    uint8_t extended = 0;
-
-    print_milcan_frame(TAG, frame, "PIPE OUT");
-    switch(interface->can_interface_type) {
-    case CAN_INTERFACE_GSUSB_FIFO:
-        ret = write(interface->wfdfifo, &(frame->frame), sizeof(struct can_frame));
+    // Calculate the minimum sync slave time
+    uint64_t bit_rate_in_ns;
+    switch(speed) {
+      case MILCAN_A_250K:
+        bit_rate_in_ns = 1000000000L/250000;
         break;
+      default:
+      case MILCAN_A_500K:
+        bit_rate_in_ns = 1000000000L/500000;
+        break;
+      case MILCAN_A_1M:
+        bit_rate_in_ns = 1000000000L/1000000;
+        break;
+    }
+    interface->sync_slave_time_ns = (bit_rate_in_ns * (MAX_BITS_PER_FRAME * 2)) + interface->sync_time_ns;
 
-    case CAN_INTERFACE_CANDO:
-        id = frame->frame.can_id;
-        if(frame->frame.can_id & CAN_EFF_FLAG) {
-            id &= CAN_EFF_MASK;
-            extended = 1;
+
+    LOGI(TAG, "Sync Frame Frequency requested %u", interface->sync_freq_hz);
+    LOGI(TAG, "Sync Frame period calculated %lu", interface->sync_time_ns);
+    LOGI(TAG, "Sync Slave timeout period %lu", interface->sync_slave_time_ns);
+
+    interface_display_mode(interface);
+
+    switch (can_interface_type)
+    {
+      case CAN_INTERFACE_CANDO:
+        LOGI(TAG, "Opening CANdo (%u)...", moduleNumber);
+        unsigned char status = CANdoInitialise();
+        if(status) {
+          CANdoConnect(moduleNumber);  // Open a connection to a CANdo device
+          if(CANdoUSBStatus()->OpenFlag) {
+            LOGI(TAG, "CANdo is open.");
+          } else {
+            LOGE(TAG, "CANdo is not open!");
+            interface = interface_close(interface);
+          }
+          if(FALSE == CANdoStart(interface->speed)) {  // Set baud rate to 500k
+            LOGE(TAG, "Unable to set CANdo baud rate!");
+            interface = interface_close(interface);
+          }
         } else {
-            id &= CAN_SFF_MASK;
+          LOGE(TAG, "CANdo API library not found!");
+          interface = interface_close(interface);
+          break;
         }
-        ret = CANdoTx(extended, id, frame->frame.len, frame->frame.data);
         break;
-    
-    default:
+      case CAN_INTERFACE_GSUSB_SO:
+        LOGI(TAG, "Opening GSUSB (%u)...", moduleNumber);
+        
+        int rep = gsusbInit(&interface->ctx);
+        if(rep == GSUSB_OK) {
+          switch(interface->speed) {
+            case MILCAN_A_250K:
+              rep = gsusbOpen(&interface->ctx, moduleNumber, 6, 7, 2, 1, 12); // Sample point: 87.5%
+              break;
+            case MILCAN_A_500K:
+              rep = gsusbOpen(&interface->ctx, moduleNumber, 6, 7, 2, 1, 6); // Sample point: 87.5%
+              break;
+            case MILCAN_A_1M:
+              rep = gsusbOpen(&interface->ctx, moduleNumber, 6, 7, 2, 1, 3); // Sample point: 87.5%
+              break;        
+          }
+          if(rep != GSUSB_OK) {
+            gsusbExit(&interface->ctx);
+          }
+        }
+        if(rep == GSUSB_OK) {
+          LOGI(TAG, "Device opened!");
+        } else {
+          LOGE(TAG, "Error opening!");
+          interface = interface_close(interface);
+        }
+        break;
+      default:
         LOGE(TAG, "CAN interface type is unrecognised or unsupported.");
+        interface = interface_close(interface);
         break;
     }
-    return ret;
+  }
+
+  return interface;
 }
 
-void milcan_handle_rx_message(struct milcan_a* interface, struct milcan_frame *frame) {
+struct milcan_a* interface_close(struct milcan_a* interface) {
+  if(interface != NULL) {
+    interface->eventRunFlag = FALSE;
+    switch(interface->can_interface_type) {
+      case CAN_INTERFACE_CANDO:
+        CANdoCloseAndFinalise();
+        break;
+      case CAN_INTERFACE_GSUSB_SO:
+        gsusbExit(&interface->ctx);
+        break;
+    }
+    LOGI(TAG, "Freeing memory...");
+    free(interface);
+    interface = NULL;
+    LOGI(TAG, "Done.");
+  }
+  return interface;
+}
+
+int interface_send(struct milcan_a* interface, struct milcan_frame * frame) {
+  // ssize_t ret = -1;
+  int rep = FALSE;
+  uint32_t id;
+  uint8_t extended = 0;
+
+  print_milcan_frame(TAG, frame, "PIPE OUT");
+  switch(interface->can_interface_type) {
+    case CAN_INTERFACE_CANDO:
+      id = frame->frame.can_id;
+      if(frame->frame.can_id & CAN_EFF_FLAG) {
+        id &= CAN_EFF_MASK;
+        extended = 1;
+      } else {
+        id &= CAN_SFF_MASK;
+      }
+      rep= CANdoTx(extended, id, frame->frame.len, frame->frame.data);
+      break;
+
+    case CAN_INTERFACE_GSUSB_SO:
+      if(GSUSB_OK == gsusbWrite(&interface->ctx, &(frame->frame))) {
+        rep = TRUE;
+      }
+      break;
+
+    default:
+      LOGE(TAG, "CAN interface type is unrecognised or unsupported.");
+      break;
+  }
+  return rep;
+}
+
+void interface_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame *frame) {
+  pthread_mutex_lock(&(interface->rx.rxBufferMutex));
+  if(interface->rx.write_offset < RX_BUFFER_SIZE) {
+    // LOGI(TAG, "1. Id = %08x, Len = %u", frame->frame.can_id, frame->frame.len);
+    memcpy(&(interface->rx.buffer[interface->rx.write_offset]), frame, sizeof(struct milcan_frame));
+    // LOGI(TAG, "2. Id = %08x, Len = %u", interface->rx.buffer[interface->rx.write_offset].frame.can_id, interface->rx.buffer[interface->rx.write_offset].frame.len);
+    interface->rx.write_offset++;
+    // LOGI(TAG, "Rx buffer contains %u messages.", interface->rx.write_offset);
+  } else {
+    LOGE(TAG, "Rx Buffer full!");
+  }
+  pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
+}
+
+void interface_handle_rx_message(struct milcan_a* interface, struct milcan_frame *frame) {
   print_milcan_frame(TAG, frame, "PIPE IN");
   if((frame->frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
     // We've recieved a sync frame!
     if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
       interface->mode = MILCAN_A_MODE_OPERATIONAL;
       interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
-      milcan_display_mode(interface);
+      interface_display_mode(interface);
       if(interface->current_sync_master != interface->sourceAddress) {    // It's not from us.
         interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+        interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
       } else {
         LOGI(TAG, "We are now Sync Master!");
       }
@@ -242,145 +265,85 @@ void milcan_handle_rx_message(struct milcan_a* interface, struct milcan_frame *f
           LOGI(TAG, "We are no longer Sync Master.");
         }
         interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+        interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
       } else {
         LOGI(TAG, "We are now Sync Master!");
       }
       interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
     }
+  } else {
+    // Add the message to the Rx buffer.
+    interface_add_to_rx_buffer(interface, frame);
   }
 }
 
-int milcan_recv(struct milcan_a* interface) {
+// Returns the number of messages left in the buffer
+uint16_t interface_rx_buffer_size(struct milcan_a* interface) {
+  uint16_t ret = 0;
+  pthread_mutex_lock(&(interface->rx.rxBufferMutex));
+  ret = interface->rx.write_offset;
+  pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
+
+  return ret;
+}
+
+// Returns 1 if we've read a message from the buffer, else 0.
+int interface_recv(struct milcan_a* interface, struct milcan_frame *frame) {
+  int ret = 0;
+  pthread_mutex_lock(&(interface->rx.rxBufferMutex));
+  if(interface->rx.write_offset > 0) {
+    // LOGI(TAG, "3. Id = %08x, Len = %u", interface->rx.buffer[0].frame.can_id, interface->rx.buffer[0].frame.len);
+    memcpy(frame, &(interface->rx.buffer[0]), sizeof(struct milcan_frame));
+    // LOGI(TAG, "4. Id = %08x, Len = %u", frame->frame.can_id, frame->frame.len);
+    memmove(&(interface->rx.buffer[0]), &(interface->rx.buffer[1]), sizeof(struct milcan_frame) * (RX_BUFFER_SIZE  -1));
+    if(interface->rx.write_offset > 0) {  // We shouldn't have to to check but memory errors suck so I'll check.
+      interface->rx.write_offset--;
+    }
+    // LOGI(TAG, "Rx buffer contains %u messages.", interface->rx.write_offset);
+    ret = 1;
+  }
+  pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
+
+  return ret;
+}
+
+int interface_handle_rx(struct milcan_a* interface) {
   int ret;
-  int i = 0;
+  // int i = 0;
   struct milcan_frame frame;
   frame.mortal = 0;
-  int toRead = 0;
+  // int toRead = 0;
 
   switch(interface->can_interface_type) {
     case CAN_INTERFACE_CANDO:
-      // LOGE(TAG, "Alan needs to write this bit!");
       CANdoRx();
-      while(CANdoReadRxQueue(&(frame.frame))) {
-        milcan_handle_rx_message(interface, &frame);
+      ret = CANdoReadRxQueue(&(frame.frame));
+      while(ret) {
+        switch(ret) {
+            case MILCAN_OK:
+                interface_handle_rx_message(interface, &frame);
+                break;
+            default:
+            case MILCAN_ERROR:
+                break;
+            case MILCAN_ERROR_CONN_CLOSED:
+                LOGE(TAG, "CAN connection closed.");
+                return MILCAN_ERROR_FATAL;
+        }
+        ret = CANdoReadRxQueue(&(frame.frame));
       }
       break;
-    case CAN_INTERFACE_GSUSB_FIFO:
-      if(kq == -1) {
-        // create a new kernel event queue
-        if ((kq = kqueue()) == -1) {
-          LOGE(TAG, "Unable to create kqueue.");
-          return MILCAN_ERROR_FATAL;
-        }
+    case CAN_INTERFACE_GSUSB_SO:
+      while(GSUSB_OK == gsusbRead(&interface->ctx, &(frame.frame))) {
+        interface_handle_rx_message(interface, &frame);
       }
-      if(nev == -1) {
-        // initialise kevent structures
-        EV_SET(&chlist[0], interface->rfdfifo, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-        nev = kevent(kq, chlist, KQUEUE_CH_SIZE, NULL, 0, NULL);
-        if (nev < 0) {
-          LOGE(TAG, "Unable to listen to kqueue.");
-          return MILCAN_ERROR_FATAL;
-        }
-      }
-
-      nev = kevent(kq, NULL, 0, evlist, KQUEUE_EV_SIZE, &zero_ts);  // Non-blocking
-
-      if (nev < 0) {
-        LOGE(TAG, "%s() Unable to listen to kqueue.", __FUNCTION__);
-        return MILCAN_ERROR_FATAL;
-      }
-      else if (nev > 0) {
-        for (i = 0; i < nev; i++) {
-          if (evlist[i].flags & EV_EOF) {
-            LOGE(TAG, "Read direction of socket has shutdown.");
-            return MILCAN_ERROR_FATAL;
-          }
-
-          if (evlist[i].flags & EV_ERROR) {                /* report errors */
-            LOGE(TAG, "EV_ERROR: %s.", strerror(evlist[i].data));
-            return MILCAN_ERROR_FATAL;
-          }
-    
-          if (evlist[i].ident == interface->rfdfifo) {                  /* we have data from the host */
-            // milcan_recv(interface, (int)(evlist[i].data));
-            toRead = (int)(evlist[i].data);
-            do {
-              i++;
-              ret = read(interface->rfdfifo, &(frame.frame), sizeof(struct can_frame));
-              toRead -= ret;
-              if(ret != sizeof(struct can_frame)) {
-                LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
-              } else {
-                milcan_handle_rx_message(interface, &frame);
-              }
-            } while ((toRead >= sizeof(struct can_frame)) || (toRead < 0));
-          }
-        }
-      }
-    break;
+      break;
   }
 
   return MILCAN_OK;
 }
 
-// int milcan_recv(struct milcan_a* interface, int toRead) {
-//     int ret;
-//     int i = 0;
-//     struct milcan_frame frame;
-//     frame.mortal = 0;
-
-//     do {
-//         i++;
-//         switch(interface->can_interface_type) {
-//             case CAN_INTERFACE_CANDO:
-//                 // LOGE(TAG, "Alan needs to write this bit!");
-
-//                 break;
-//             case CAN_INTERFACE_GSUSB_FIFO:
-//                 ret = read(interface->rfdfifo, &(frame.frame), sizeof(struct can_frame));
-//                 toRead -= ret;
-//                 if(ret != sizeof(struct can_frame)) {
-//                     LOGE(TAG, "Read %u bytes, expected %lu bytes!\n", ret, sizeof(struct can_frame));
-//                 } else {
-//                     milcan_handle_rx_message(interface, &(frame.frame));
-//                     // print_milcan_frame(TAG, &frame, "PIPE IN");
-//                     // if((frame.frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
-//                     //     // We've recieved a sync frame!
-//                     //     if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
-//                     //         interface->mode = MILCAN_A_MODE_OPERATIONAL;
-//                     //         interface->current_sync_master = (uint8_t) (frame.frame.can_id & MILCAN_ID_SOURCE_MASK);
-//                     //         milcan_display_mode(interface);
-//                     //         if(interface->current_sync_master != interface->sourceAddress) {    // It's not from us.
-//                     //             interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
-//                     //         } else {
-//                     //             LOGI(TAG, "We are now Sync Master!");
-//                     //         }
-//                     //     } else if((frame.frame.can_id & MILCAN_ID_SOURCE_MASK) < interface->current_sync_master) {
-//                     //         // This device has a higher priority than us so it should be the Sync Master instead which ever device currently has it.
-//                     //         if(((uint8_t)(frame.frame.can_id & MILCAN_ID_SOURCE_MASK)) != interface->sourceAddress) {    // It's not from us.
-//                     //             if(interface->current_sync_master == interface->sourceAddress) {
-//                     //                 LOGI(TAG, "We are no longer Sync Master.");
-//                     //             }
-//                     //             interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
-//                     //         } else {
-//                     //             LOGI(TAG, "We are now Sync Master!");
-//                     //         }
-//                     //         interface->current_sync_master = (uint8_t) (frame.frame.can_id & MILCAN_ID_SOURCE_MASK);
-//                     //     }
-//                     // }
-//                 }
-//                 break;
-    
-//             default:
-//                 LOGE(TAG, "CAN interface type is unrecognised or unsupported.");
-//                 return MILCAN_ERROR;
-//         }
-//     } while ((toRead >= sizeof(struct can_frame)) || (toRead < 0));
-
-//     return 0;
-// }
-
-void milcan_display_mode(struct milcan_a* interface) {
+void interface_display_mode(struct milcan_a* interface) {
     switch(interface->mode) {
     case MILCAN_A_MODE_POWER_OFF:
         LOGI(TAG, "Mode: Power Off");
@@ -398,4 +361,9 @@ void milcan_display_mode(struct milcan_a* interface) {
         LOGE(TAG, "Mode: Unrecognised (%u)", interface->mode);
         break;
     }
+}
+
+int interface_q_tx(struct milcan_a* interface, struct milcan_frame *frame) {
+  //
+  return 0;
 }
