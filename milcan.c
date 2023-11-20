@@ -45,6 +45,7 @@
 
 void checkSync(struct milcan_a* interface) {
   uint64_t now = nanos();
+  struct milcan_frame * qframe = NULL;
 
   if((interface->current_sync_master == interface->sourceAddress) // We are Sync Master
     || (((interface->options & MILCAN_A_OPTION_SYNC_MASTER) == MILCAN_A_OPTION_SYNC_MASTER) && 
@@ -84,6 +85,24 @@ void checkSync(struct milcan_a* interface) {
       interface->mode = MILCAN_A_MODE_PRE_OPERATIONAL;
     }
   }
+
+  switch(interface->mode) {
+    case MILCAN_A_MODE_POWER_OFF:             // System is off
+      break;
+    case MILCAN_A_MODE_PRE_OPERATIONAL:       // The only messages that we can send are Sync or Enter Config
+      break;
+    case MILCAN_A_MODE_OPERATIONAL:           // Normal usage
+      qframe = interface_tx_read_q(interface);
+      if(qframe != NULL) {
+        interface_send(interface, qframe);
+        free(qframe);
+        qframe = NULL;
+      }
+      break;
+    case MILCAN_A_MODE_SYSTEM_CONFIGURATION:  // Config Messages only
+      break;
+
+  }
 }
 
 static void * EventHandler(void * eventContext)
@@ -110,7 +129,6 @@ void * milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, 
 
   // We've connected so start the background tasks.
   // Start the rx thread.
-  pthread_mutex_init(&(interface->rx.rxBufferMutex), NULL);  // Init. mutex
   interface->eventRunFlag = TRUE;
   if (pthread_create(&(interface->rxThreadId), NULL, EventHandler, (void *)interface) == 0)
   {
@@ -133,7 +151,7 @@ void milcan_close(void * interface) {
 
 // Add a message to the output stack.
 int milcan_send(void* interface, struct milcan_frame * frame) {
-  return interface_q_tx(interface, frame);
+  return interface_tx_add_to_q(interface, frame);
 }
 
 // Read a mesage from the incoming stack.

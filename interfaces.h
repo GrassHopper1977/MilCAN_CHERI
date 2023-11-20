@@ -28,6 +28,17 @@ struct milcan_rx_q {
   uint16_t write_offset;
 };
 
+/// @brief Structure for the link list entries
+struct list_milcan_frame {
+    struct milcan_frame* frame;
+    struct list_milcan_frame* next;
+};
+
+struct milcan_tx_q {
+  pthread_mutex_t txBufferMutex;  // Mutex to control threaded access to read data buffer.
+  struct list_milcan_frame* tx_queue[MILCAN_ID_PRIORITY_COUNT];
+};
+
 struct milcan_a {
   uint8_t sourceAddress;      // This device's physical network address
   uint8_t can_interface_type; // The CAN Interface type e.g. CAN_INTERFACE_GSUSB_FIFO
@@ -42,11 +53,11 @@ struct milcan_a {
   int wfdfifo;                // Write FIFO
   int mode;                   // The current MILCAN_A_MODE
   uint16_t options;           // The various MILCAN_A_OPTION
-  // GSUSB data
-  struct gsusb_ctx ctx;
-  pthread_t rxThreadId; // Read thread ID.
-  uint8_t eventRunFlag; // Used to close the therad when exiting.
-  struct milcan_rx_q rx; // The input buffer.
+  struct gsusb_ctx ctx;     // The context for the GSUSB USB to CAN driver
+  pthread_t rxThreadId;     // Read thread ID.
+  uint8_t eventRunFlag;     // Used to close the therad when exiting.
+  struct milcan_rx_q rx;    // The input buffer.
+  struct milcan_tx_q tx;    // The output buffer.
 };
 
 // Function definitions
@@ -56,6 +67,7 @@ int interface_send(struct milcan_a* interface, struct milcan_frame * frame);
 void interface_display_mode(struct milcan_a* interface);
 int interface_recv(struct milcan_a* interface, struct milcan_frame *frame);
 int interface_handle_rx(struct milcan_a* interface);
-int interface_q_tx(struct milcan_a* interface, struct milcan_frame *frame);
+int interface_tx_add_to_q(struct milcan_a* interface, struct milcan_frame *frame);
+struct milcan_frame * interface_tx_read_q(struct milcan_a* interface);
 
 #endif  // __INTERFACES_H__

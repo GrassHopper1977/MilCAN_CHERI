@@ -22,6 +22,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include "interfaces.h"
+#include "txq.h"
 #define LOG_LEVEL 3
 #include "utils/logs.h"
 #include "utils/timestamp.h"
@@ -95,6 +96,10 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
     interface->eventRunFlag = FALSE;
     interface->rx.rxBufferMutex = NULL;
     interface->rx.write_offset = 0;
+    interface->tx.txBufferMutex = NULL;
+    for(uint8_t i = 0; i < MILCAN_ID_PRIORITY_COUNT; i++) {
+      interface->tx.tx_queue[i] = NULL;
+    }
 
     // Calculate the minimum sync slave time
     uint64_t bit_rate_in_ns;
@@ -176,6 +181,11 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
     }
   }
 
+  if(interface != NULL) {
+    pthread_mutex_init(&(interface->rx.rxBufferMutex), NULL);  // Init. mutex
+    pthread_mutex_init(&(interface->tx.txBufferMutex), NULL);  // Init. mutex
+  }
+
   return interface;
 }
 
@@ -204,7 +214,7 @@ int interface_send(struct milcan_a* interface, struct milcan_frame * frame) {
   uint32_t id;
   uint8_t extended = 0;
 
-  print_milcan_frame(TAG, frame, "PIPE OUT");
+  // print_milcan_frame(TAG, frame, "PIPE OUT");
   switch(interface->can_interface_type) {
     case CAN_INTERFACE_CANDO:
       id = frame->frame.can_id;
@@ -245,7 +255,9 @@ void interface_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame 
 }
 
 void interface_handle_rx_message(struct milcan_a* interface, struct milcan_frame *frame) {
-  print_milcan_frame(TAG, frame, "PIPE IN");
+  if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
+    print_milcan_frame(TAG, frame, "PIPE IN");
+  }
   if((frame->frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
     // We've recieved a sync frame!
     if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
@@ -273,7 +285,9 @@ void interface_handle_rx_message(struct milcan_a* interface, struct milcan_frame
     }
   } else {
     // Add the message to the Rx buffer.
-    interface_add_to_rx_buffer(interface, frame);
+    if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
+      interface_add_to_rx_buffer(interface, frame);
+    }
   }
 }
 
@@ -363,7 +377,31 @@ void interface_display_mode(struct milcan_a* interface) {
     }
 }
 
-int interface_q_tx(struct milcan_a* interface, struct milcan_frame *frame) {
-  //
+int interface_tx_add_to_q(struct milcan_a* interface, struct milcan_frame *frame) {
+  // Adjust txq functions to accept the interface. DONE
+  // Create a mutex for the Tx to control access. DONE
+  // CFG messages, etc should be controlled by check sync.
+  // Will need a state to keep track of sending a CFG mesage and how far through we are.
+
+  struct milcan_frame *frame2 = calloc(sizeof(struct milcan_frame), 1);
+  if(frame2 == NULL) {
+    return ENOMEM;
+  }
+  memcpy(frame2, frame, sizeof(struct milcan_frame));
+  pthread_mutex_lock(&(interface->tx.txBufferMutex));
+  txQAdd(interface, frame2);
+  pthread_mutex_unlock(&(interface->tx.txBufferMutex));
   return 0;
+}
+
+struct milcan_frame * interface_tx_read_q(struct milcan_a* interface) {
+  struct milcan_frame *frame = NULL;
+
+  pthread_mutex_lock(&(interface->tx.txBufferMutex));
+  for(int i = 0; (i < MILCAN_ID_PRIORITY_COUNT) && (frame == NULL); i++) {
+    frame = txQRead(interface, i);
+  }
+  pthread_mutex_unlock(&(interface->tx.txBufferMutex));
+
+  return frame;
 }
