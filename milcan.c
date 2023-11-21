@@ -92,6 +92,7 @@ void checkSync(struct milcan_a* interface) {
     case MILCAN_A_MODE_PRE_OPERATIONAL:       // The only messages that we can send are Sync or Enter Config
       break;
     case MILCAN_A_MODE_OPERATIONAL:           // Normal usage
+      // Transmit anything that need transmitting form the Tx Q.
       qframe = interface_tx_read_q(interface);
       if(qframe != NULL) {
         interface_send(interface, qframe);
@@ -112,7 +113,6 @@ static void * EventHandler(void * eventContext)
   while (interface->eventRunFlag == TRUE) {
     interface_handle_rx(interface);  // Check anything to read an put it in the Rx Q.
     checkSync(interface); // Check Sync
-    // Transmit anything that need transmitting form the Tx Q.
   }
   LOGI(TAG, "Exit event handler");
   

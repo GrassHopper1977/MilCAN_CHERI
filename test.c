@@ -30,7 +30,7 @@
 // #include "interfaces.h"
 
 #define TAG "test"
-#define SLEEP_TIME 100
+#define SLEEP_TIME_US 100
 #define HEARTBEAT_PERIOD_MS 100
 
 
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
   
   LOGI(TAG, "Starting loop...\n");
   struct milcan_frame frame;
-  uint64_t heartbeat_time = millis() + HEARTBEAT_PERIOD_MS; // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
+  uint64_t heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS); // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
   struct milcan_frame heartbeat_frame;
   heartbeat_frame.mortal = 0;
   heartbeat_frame.frame.can_id = MILCAN_MAKE_ID(1, 0, 11, 12, localAddress);
@@ -196,7 +196,6 @@ int main(int argc, char *argv[])
   
   // loop forever
   for (;;) {
-    //checkSync(interface);
     result = milcan_recv(interface, &frame);
     if(result < MILCAN_ERROR_FATAL) {
       LOGE(TAG, "MILCAN_ERROR_FATAL...");
@@ -204,14 +203,13 @@ int main(int argc, char *argv[])
     } else if(result > 0) {
       print_can_frame(TAG, &(frame.frame), 0, "Mesage In");
     }
-    if(millis() > heartbeat_time) {
-      // print_can_frame(TAG, &(heartbeat_frame.frame), 0, "");
-      heartbeat_time = millis() + HEARTBEAT_PERIOD_MS;
+    if(nanos() > heartbeat_time) {
+      heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
       milcan_send(interface, &heartbeat_frame);
       heartbeat_frame.frame.data[0]++;
       heartbeat_frame.frame.data[1] ^= 0xFF;
     }
-    usleep(SLEEP_TIME);
+    usleep(SLEEP_TIME_US);
   }
 
   tidyBeforeExit();
