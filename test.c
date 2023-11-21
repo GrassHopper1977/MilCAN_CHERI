@@ -204,7 +204,8 @@ int main(int argc, char *argv[])
       print_can_frame(TAG, &(frame.frame), 0, "Mesage In");
     }
     if(nanos() > heartbeat_time) {
-      heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
+      // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
+      heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
       milcan_send(interface, &heartbeat_frame);
       heartbeat_frame.frame.data[0]++;
       heartbeat_frame.frame.data[1] ^= 0xFF;
