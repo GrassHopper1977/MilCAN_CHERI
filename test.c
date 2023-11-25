@@ -211,6 +211,9 @@ int main(int argc, char *argv[])
         case MILCAN_FRAME_TYPE_NEW_FRAME:
           // printf("Frame: %000x\r", frame.frame.can_id);
           break;
+        case MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER:
+          LOGI(TAG, "Sync Master is %02x.", frame.frame.can_id);
+          break;
         default:
           LOGE(TAG, "Unknown MilCAN frame type (0x%02x)", frame.frame_type);
           break;

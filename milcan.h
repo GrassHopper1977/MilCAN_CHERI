@@ -67,6 +67,7 @@
 #define MILCAN_FRAME_TYPE_MESSAGE               0x00
 #define MILCAN_FRAME_TYPE_CHANGE_MODE           0x01
 #define MILCAN_FRAME_TYPE_NEW_FRAME             0x02
+#define MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER    0x03
 
 /// @brief The MILCAN A frame is standard CAN but with the mortal field (0 means it never expires - anything else is the time in nanoseconds at which it will expire).
 struct milcan_frame {
@@ -216,7 +217,7 @@ struct milcan_frame {
     .mortal = 0\
   }
 
-/// @brief Creates the power off mode message
+/// @brief Creates the change of mode message
 /// @param mode - The new mode 
 #define MILCAN_MAKE_CHANGE_MODE(mode)\
   {\
@@ -230,12 +231,26 @@ struct milcan_frame {
     .mortal = 0\
   }
 
-/// @brief Creates the power off mode message
+/// @brief Creates the new sync value message
 /// @param sync - The new value of the sync frame
 #define MILCAN_MAKE_NEW_FRAME(sync)\
   {\
     .frame_type = MILCAN_FRAME_TYPE_NEW_FRAME,\
     .frame.can_id = (sync),\
+    .frame.data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 0,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
+
+/// @brief Creates the change of sync master message
+/// @param id - The ID os the new sync master
+#define MILCAN_MAKE_NEW_SYNC_MASTER(id)\
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER,\
+    .frame.can_id = (id),\
     .frame.data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
     .frame.len = 0,\
     .frame.__pad = 0,\
@@ -270,7 +285,7 @@ struct milcan_frame {
 // MILCAN options
 #define MILCAN_A_OPTION_SYNC_MASTER     (0x0001)  // This device can be a Sync Master
 #define MILCAN_A_OPTION_ECHO            (0x0002)  // Messages from ourselevs will also be added to RX Q
-#define MILCAN_A_OPTION_LISTEN_CONTROL  (0x0003)  // Control messages (Sync, Enter Config and Exit Config) will be added to Rx Q.
+#define MILCAN_A_OPTION_LISTEN_CONTROL  (0x0004)  // Control messages (Sync, Enter Config and Exit Config) will be added to Rx Q.
 
 void milcan_display_mode(void* interface);
 void * milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options);
