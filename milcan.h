@@ -64,10 +64,15 @@
 #define MILCAN_ID_PRIMARY_DIAGNOSTICS_2                     0x65
 #define MILCAN_ID_PRIMARY_DIAGNOSTICS_3                     0x66
 
+#define MILCAN_FRAME_TYPE_MESSAGE               0x00
+#define MILCAN_FRAME_TYPE_CHANGE_MODE           0x01
+#define MILCAN_FRAME_TYPE_NEW_FRAME             0x02
+
 /// @brief The MILCAN A frame is standard CAN but with the mortal field (0 means it never expires - anything else is the time in nanoseconds at which it will expire).
 struct milcan_frame {
-    struct can_frame frame;
-    uint64_t mortal;
+  uint8_t frame_type;
+  struct can_frame frame;
+  uint64_t mortal;
 };
 
 /// @brief Creates a valid MilCAN ID
@@ -77,14 +82,14 @@ struct milcan_frame {
 /// @param secondary - Message Secondary Type. Range 0 to 255.
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_ID(priority, request, primary, secondary, source)\
-    (\
-        MILCAN_ID_MILCAN_TYPE | CAN_EFF_FLAG\
-        | (((priority) << 26) & MILCAN_ID_PRIORITY_MASK)\
-        | ((request) ? MILCAN_ID_MILCAN_REQUEST : 0)\
-        | (((primary) << 16) & MILCAN_ID_PRIMARY_MASK)\
-        | (((secondary) << 8) & MILCAN_ID_SECONDARY_MASK)\
-        | ((source) & MILCAN_ID_SOURCE_MASK)\
-    )
+  (\
+    MILCAN_ID_MILCAN_TYPE | CAN_EFF_FLAG\
+    | (((priority) << 26) & MILCAN_ID_PRIORITY_MASK)\
+    | ((request) ? MILCAN_ID_MILCAN_REQUEST : 0)\
+    | (((primary) << 16) & MILCAN_ID_PRIMARY_MASK)\
+    | (((secondary) << 8) & MILCAN_ID_SECONDARY_MASK)\
+    | ((source) & MILCAN_ID_SOURCE_MASK)\
+  )
 
 /// @brief Creates a MilCAn message. NOTE You MUST set all 8 bytes of data, even if you're not using all of them.
 /// @param id - The CAN ID.
@@ -99,113 +104,151 @@ struct milcan_frame {
 /// @param data6 - The data array byte 6.
 /// @param data7 - The data array byte 7.
 #define MILCAN_MAKE_FRAME(id, mort, length, data0, data1, data2, data3, data4, data5, data6, data7)\
-    {\
-        .mortal = (mort),\
-        .frame.can_id = (id),\
-        .frame.data = {(data0), (data1), (data2), (data3), (data4), (data5), (data6), (data7)},\
-        .frame.len = (length),\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .mortal = (mort),\
+    .frame.can_id = (id),\
+    .frame.data = {(data0), (data1), (data2), (data3), (data4), (data5), (data6), (data7)},\
+    .frame.len = (length),\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0\
+  }
 
 /// @brief Creates the Sync Frame
 /// @param source - Source Address. Range to 0 to 255.
 /// @param counter - The counter (range 0 to 1023).
 #define MILCAN_MAKE_SYNC(source, counter)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, (source)),\
-        .frame.data = {((counter) & 0x0FF), (((counter) >> 8) & 0x03), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 2,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, (source)),\
+    .frame.data = {((counter) & 0x0FF), (((counter) >> 8) & 0x03), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 2,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 // Enter Config Mode
 /// @brief Creates the first Enter Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_ENTER_CONFIG_0(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'C', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'C', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 /// @brief Creates the second Enter Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_ENTER_CONFIG_1(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'F', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'F', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 /// @brief Creates the third Enter Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_ENTER_CONFIG_2(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'G', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'G', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 // Exit Config Mode
 /// @brief Creates the first Exit Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_EXIT_CONFIG_0(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'O', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'O', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 /// @brief Creates the second Exit Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_EXIT_CONFIG_1(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'P', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'P', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
 /// @brief Creates the third Exit Config Mode mesage
 /// @param source - Source Address. Range to 0 to 255.
 #define MILCAN_MAKE_EXIT_CONFIG_2(source)\
-    {\
-        .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
-        .frame.data = {(uint8_t)'R', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
-        .frame.len = 1,\
-        .frame.__pad = 0,\
-        .frame.__res0 = 0,\
-        .frame.__res1 = 0,\
-        .mortal = 0\
-    }
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_MESSAGE,\
+    .frame.can_id = MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG, (source)),\
+    .frame.data = {(uint8_t)'R', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 1,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
 
-#define MILCAN_OK                   0   // Generic error
+/// @brief Creates the power off mode message
+/// @param mode - The new mode 
+#define MILCAN_MAKE_CHANGE_MODE(mode)\
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_CHANGE_MODE,\
+    .frame.can_id = (mode),\
+    .frame.data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 0,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
+
+/// @brief Creates the power off mode message
+/// @param sync - The new value of the sync frame
+#define MILCAN_MAKE_NEW_FRAME(sync)\
+  {\
+    .frame_type = MILCAN_FRAME_TYPE_NEW_FRAME,\
+    .frame.can_id = (sync),\
+    .frame.data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},\
+    .frame.len = 0,\
+    .frame.__pad = 0,\
+    .frame.__res0 = 0,\
+    .frame.__res1 = 0,\
+    .mortal = 0\
+  }
+
+#define MILCAN_OK                   0   // Generic pass
 #define MILCAN_ERROR                -1  // Generic error
 #define MILCAN_ERROR_FATAL          -2  // Generic fatal error
+#define MILCAN_ERROR_EOF            -3  // End Of File i.e. no more messages to read.
+#define MILCAN_ERROR_MEM            -4  // Unable to allocate enough memory.
 
 #define CAN_INTERFACE_NONE          0   // Basically, NULL
 #define CAN_INTERFACE_SOCKET_CAN    1   // Not supported yet
@@ -225,8 +268,11 @@ struct milcan_frame {
 #define MILCAN_A_1M     2
 
 // MILCAN options
-#define MILCAN_A_OPTION_SYNC_MASTER     (0x0001)    // This device can be a Sync Master
+#define MILCAN_A_OPTION_SYNC_MASTER     (0x0001)  // This device can be a Sync Master
+#define MILCAN_A_OPTION_ECHO            (0x0002)  // Messages from ourselevs will also be added to RX Q
+#define MILCAN_A_OPTION_LISTEN_CONTROL  (0x0003)  // Control messages (Sync, Enter Config and Exit Config) will be added to Rx Q.
 
+void milcan_display_mode(void* interface);
 void * milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options);
 void milcan_close(void * interface);
 int milcan_send(void* interface, struct milcan_frame * frame);

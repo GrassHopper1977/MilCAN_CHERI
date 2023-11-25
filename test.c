@@ -201,7 +201,20 @@ int main(int argc, char *argv[])
       LOGE(TAG, "MILCAN_ERROR_FATAL...");
       exit(EXIT_FAILURE);
     } else if(result > 0) {
-      print_can_frame(TAG, &(frame.frame), 0, "Mesage In");
+      switch(frame.frame_type) {
+        case MILCAN_FRAME_TYPE_MESSAGE:
+          print_can_frame(TAG, &(frame.frame), 0, "Mesage In");
+          break;
+        case MILCAN_FRAME_TYPE_CHANGE_MODE:
+          milcan_display_mode(interface);
+          break;
+        case MILCAN_FRAME_TYPE_NEW_FRAME:
+          // printf("Frame: %000x\r", frame.frame.can_id);
+          break;
+        default:
+          LOGE(TAG, "Unknown MilCAN frame type (0x%02x)", frame.frame_type);
+          break;
+      }
     }
     if(nanos() > heartbeat_time) {
       // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);

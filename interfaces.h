@@ -14,7 +14,6 @@
 #define SYNC_PERIOD_1PC(a) (uint64_t)((a) * 0.01)
 #define SYNC_PERIOD_20PC(a) (uint64_t)((a) * 0.2)
 #define SYNC_PERIOD_80PC(a) (uint64_t)((a) * 0.8)
-// #define SYNC_SLAVE_TIMEOUT(ptu_len, )
 
 // System modes as defined in MWG-MILA-001 Rev 3 Section 4.2 (Page 37 of 79)
 #define MILCAN_A_MODE_POWER_OFF             (0) // System is off
@@ -40,33 +39,34 @@ struct milcan_tx_q {
 };
 
 struct milcan_a {
-  uint8_t sourceAddress;      // This device's physical network address
-  uint8_t can_interface_type; // The CAN Interface type e.g. CAN_INTERFACE_GSUSB_FIFO
-  uint8_t speed;              // The MilCAN speed MILCAN_A_250K, MILCAN_A_500K or, MILCAN_A_1M
-  uint16_t sync;              // The Sync Slot Counter - this is masked with MILCAN_A_SYNC_COUNT_MASK after any changes
-  uint64_t syncTimer;         // Used to calculate when the next sync frame is due to be sent.
-  uint16_t sync_freq_hz;      // The frequency to send the sync frame
-  uint64_t sync_time_ns;      // The period to send the sync frame in ns - this is also called the PTU (Primary Time Unit)
+  uint8_t sourceAddress;        // This device's physical network address
+  uint8_t can_interface_type;   // The CAN Interface type e.g. CAN_INTERFACE_GSUSB_FIFO
+  uint8_t speed;                // The MilCAN speed MILCAN_A_250K, MILCAN_A_500K or, MILCAN_A_1M
+  uint16_t sync;                // The Sync Slot Counter - this is masked with MILCAN_A_SYNC_COUNT_MASK after any changes
+  uint64_t syncTimer;           // Used to calculate when the next sync frame is due to be sent.
+  uint16_t sync_freq_hz;        // The frequency to send the sync frame
+  uint64_t sync_time_ns;        // The period to send the sync frame in ns - this is also called the PTU (Primary Time Unit)
+  uint8_t current_sync_master;  // Who is the current Sync Master?
+  int rfdfifo;                  // Read FIFO
+  int wfdfifo;                  // Write FIFO
+  int mode;                     // The current MILCAN_A_MODE
+  uint16_t options;             // The various MILCAN_A_OPTION
+  struct gsusb_ctx ctx;         // The context for the GSUSB USB to CAN driver
+  pthread_t rxThreadId;         // Read thread ID.
+  uint8_t eventRunFlag;         // Used to close the therad when exiting.
+  struct milcan_rx_q rx;        // The input buffer.
+  struct milcan_tx_q tx;        // The output buffer.
   uint64_t sync_slave_time_ns;  // The sync slave time in ns. This is how long we have to wait without a sync before we attempt to take over a sync master.
-  uint8_t current_sync_master;    // Who is the current Sync Master?
-  int rfdfifo;                // Read FIFO
-  int wfdfifo;                // Write FIFO
-  int mode;                   // The current MILCAN_A_MODE
-  uint16_t options;           // The various MILCAN_A_OPTION
-  struct gsusb_ctx ctx;     // The context for the GSUSB USB to CAN driver
-  pthread_t rxThreadId;     // Read thread ID.
-  uint8_t eventRunFlag;     // Used to close the therad when exiting.
-  struct milcan_rx_q rx;    // The input buffer.
-  struct milcan_tx_q tx;    // The output buffer.
+  uint64_t mode_exit_timer;     // Used to time the various timers to exit the modes.
 };
 
 // Function definitions
 struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, uint8_t can_interface_type, uint16_t moduleNumber, uint16_t options);
 struct milcan_a* interface_close(struct milcan_a* milcan_a);
 int interface_send(struct milcan_a* interface, struct milcan_frame * frame);
-void interface_display_mode(struct milcan_a* interface);
-int interface_recv(struct milcan_a* interface, struct milcan_frame *frame);
-int interface_handle_rx(struct milcan_a* interface);
+// void interface_display_mode(struct milcan_a* interface);
+// int interface_recv(struct milcan_a* interface, struct milcan_frame *frame);
+int interface_handle_rx(struct milcan_a* interface, struct milcan_frame* frame);
 int interface_tx_add_to_q(struct milcan_a* interface, struct milcan_frame *frame);
 struct milcan_frame * interface_tx_read_q(struct milcan_a* interface);
 

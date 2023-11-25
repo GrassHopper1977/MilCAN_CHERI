@@ -101,28 +101,28 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
       interface->tx.tx_queue[i] = NULL;
     }
 
-    // Calculate the minimum sync slave time
-    uint64_t bit_rate_in_ns;
-    switch(speed) {
-      case MILCAN_A_250K:
-        bit_rate_in_ns = 1000000000L/250000;
-        break;
-      default:
-      case MILCAN_A_500K:
-        bit_rate_in_ns = 1000000000L/500000;
-        break;
-      case MILCAN_A_1M:
-        bit_rate_in_ns = 1000000000L/1000000;
-        break;
-    }
-    interface->sync_slave_time_ns = (bit_rate_in_ns * (MAX_BITS_PER_FRAME * 2)) + interface->sync_time_ns;
+    // // Calculate the minimum sync slave time
+    // uint64_t bit_rate_in_ns;
+    // switch(speed) {
+    //   case MILCAN_A_250K:
+    //     bit_rate_in_ns = 1000000000L/250000;
+    //     break;
+    //   default:
+    //   case MILCAN_A_500K:
+    //     bit_rate_in_ns = 1000000000L/500000;
+    //     break;
+    //   case MILCAN_A_1M:
+    //     bit_rate_in_ns = 1000000000L/1000000;
+    //     break;
+    // }
+    // interface->sync_slave_time_ns = (bit_rate_in_ns * (MAX_BITS_PER_FRAME * 2)) + interface->sync_time_ns;
 
 
     LOGI(TAG, "Sync Frame Frequency requested %u", interface->sync_freq_hz);
     LOGI(TAG, "Sync Frame period calculated %lu", interface->sync_time_ns);
-    LOGI(TAG, "Sync Slave timeout period %lu", interface->sync_slave_time_ns);
+    // LOGI(TAG, "Sync Slave timeout period %lu", interface->sync_slave_time_ns);
 
-    interface_display_mode(interface);
+    // interface_display_mode(interface);
 
     switch (can_interface_type)
     {
@@ -240,56 +240,56 @@ int interface_send(struct milcan_a* interface, struct milcan_frame * frame) {
   return rep;
 }
 
-void interface_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame *frame) {
-  pthread_mutex_lock(&(interface->rx.rxBufferMutex));
-  if(interface->rx.write_offset < RX_BUFFER_SIZE) {
-    // LOGI(TAG, "1. Id = %08x, Len = %u", frame->frame.can_id, frame->frame.len);
-    memcpy(&(interface->rx.buffer[interface->rx.write_offset]), frame, sizeof(struct milcan_frame));
-    // LOGI(TAG, "2. Id = %08x, Len = %u", interface->rx.buffer[interface->rx.write_offset].frame.can_id, interface->rx.buffer[interface->rx.write_offset].frame.len);
-    interface->rx.write_offset++;
-    // LOGI(TAG, "Rx buffer contains %u messages.", interface->rx.write_offset);
-  } else {
-    LOGE(TAG, "Rx Buffer full!");
-  }
-  pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
-}
+// void interface_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame *frame) {
+//   pthread_mutex_lock(&(interface->rx.rxBufferMutex));
+//   if(interface->rx.write_offset < RX_BUFFER_SIZE) {
+//     // LOGI(TAG, "1. Id = %08x, Len = %u", frame->frame.can_id, frame->frame.len);
+//     memcpy(&(interface->rx.buffer[interface->rx.write_offset]), frame, sizeof(struct milcan_frame));
+//     // LOGI(TAG, "2. Id = %08x, Len = %u", interface->rx.buffer[interface->rx.write_offset].frame.can_id, interface->rx.buffer[interface->rx.write_offset].frame.len);
+//     interface->rx.write_offset++;
+//     // LOGI(TAG, "Rx buffer contains %u messages.", interface->rx.write_offset);
+//   } else {
+//     LOGE(TAG, "Rx Buffer full!");
+//   }
+//   pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
+// }
 
-void interface_handle_rx_message(struct milcan_a* interface, struct milcan_frame *frame) {
-  if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
-    print_milcan_frame(TAG, frame, "PIPE IN");
-  }
-  if((frame->frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
-    // We've recieved a sync frame!
-    if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
-      interface->mode = MILCAN_A_MODE_OPERATIONAL;
-      interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
-      interface_display_mode(interface);
-      if(interface->current_sync_master != interface->sourceAddress) {    // It's not from us.
-        interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
-        interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
-      } else {
-        LOGI(TAG, "We are now Sync Master!");
-      }
-    } else if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) < interface->current_sync_master) {
-      // This device has a higher priority than us so it should be the Sync Master instead which ever device currently has it.
-      if(((uint8_t)(frame->frame.can_id & MILCAN_ID_SOURCE_MASK)) != interface->sourceAddress) {    // It's not from us.
-        if(interface->current_sync_master == interface->sourceAddress) {
-          LOGI(TAG, "We are no longer Sync Master.");
-        }
-        interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
-        interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
-      } else {
-        LOGI(TAG, "We are now Sync Master!");
-      }
-      interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
-    }
-  } else {
-    // Add the message to the Rx buffer.
-    if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
-      interface_add_to_rx_buffer(interface, frame);
-    }
-  }
-}
+// void interface_handle_rx_message(struct milcan_a* interface, struct milcan_frame *frame) {
+//   if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
+//     print_milcan_frame(TAG, frame, "PIPE IN");
+//   }
+//   if((frame->frame.can_id & ~MILCAN_ID_SOURCE_MASK) == MILCAN_MAKE_ID(0, 0, MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT, MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_SYNC_FRAME, 0)) {
+//     // We've recieved a sync frame!
+//     if((interface->current_sync_master == 0) || (interface->mode == MILCAN_A_MODE_PRE_OPERATIONAL)) {
+//       interface->mode = MILCAN_A_MODE_OPERATIONAL;
+//       interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
+//       interface_display_mode(interface);
+//       if(interface->current_sync_master != interface->sourceAddress) {    // It's not from us.
+//         interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+//         interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
+//       } else {
+//         LOGI(TAG, "We are now Sync Master!");
+//       }
+//     } else if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) < interface->current_sync_master) {
+//       // This device has a higher priority than us so it should be the Sync Master instead which ever device currently has it.
+//       if(((uint8_t)(frame->frame.can_id & MILCAN_ID_SOURCE_MASK)) != interface->sourceAddress) {    // It's not from us.
+//         if(interface->current_sync_master == interface->sourceAddress) {
+//           LOGI(TAG, "We are no longer Sync Master.");
+//         }
+//         interface->syncTimer = nanos() + interface->sync_time_ns;  // Next period from now.
+//         interface->sync = frame->frame.data[0] + ((uint16_t) frame->frame.data[1] * 256);
+//       } else {
+//         LOGI(TAG, "We are now Sync Master!");
+//       }
+//       interface->current_sync_master = (uint8_t) (frame->frame.can_id & MILCAN_ID_SOURCE_MASK);
+//     }
+//   } else {
+//     // Add the message to the Rx buffer.
+//     if((frame->frame.can_id & MILCAN_ID_SOURCE_MASK) != interface->sourceAddress) {
+//       interface_add_to_rx_buffer(interface, frame);
+//     }
+//   }
+// }
 
 // Returns the number of messages left in the buffer
 uint16_t interface_rx_buffer_size(struct milcan_a* interface) {
@@ -301,81 +301,67 @@ uint16_t interface_rx_buffer_size(struct milcan_a* interface) {
   return ret;
 }
 
-// Returns 1 if we've read a message from the buffer, else 0.
-int interface_recv(struct milcan_a* interface, struct milcan_frame *frame) {
-  int ret = 0;
-  pthread_mutex_lock(&(interface->rx.rxBufferMutex));
-  if(interface->rx.write_offset > 0) {
-    // LOGI(TAG, "3. Id = %08x, Len = %u", interface->rx.buffer[0].frame.can_id, interface->rx.buffer[0].frame.len);
-    memcpy(frame, &(interface->rx.buffer[0]), sizeof(struct milcan_frame));
-    // LOGI(TAG, "4. Id = %08x, Len = %u", frame->frame.can_id, frame->frame.len);
-    memmove(&(interface->rx.buffer[0]), &(interface->rx.buffer[1]), sizeof(struct milcan_frame) * (RX_BUFFER_SIZE  -1));
-    if(interface->rx.write_offset > 0) {  // We shouldn't have to to check but memory errors suck so I'll check.
-      interface->rx.write_offset--;
-    }
-    // LOGI(TAG, "Rx buffer contains %u messages.", interface->rx.write_offset);
-    ret = 1;
+// // Returns 1 if we've read a message from the buffer, else 0.
+// int interface_recv(struct milcan_a* interface, struct milcan_frame *frame) {
+//   int ret = 0;
+//   pthread_mutex_lock(&(interface->rx.rxBufferMutex));
+//   if(interface->rx.write_offset > 0) {
+//     memcpy(frame, &(interface->rx.buffer[0]), sizeof(struct milcan_frame));
+//     memmove(&(interface->rx.buffer[0]), &(interface->rx.buffer[1]), sizeof(struct milcan_frame) * (RX_BUFFER_SIZE  -1));
+//     if(interface->rx.write_offset > 0) {  // We shouldn't have to to check but memory errors suck so I'll check.
+//       interface->rx.write_offset--;
+//     }
+//     ret = 1;
+//   }
+//   pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
+
+//   return ret;
+// }
+
+// Check the interface queue and return anything found.
+int interface_handle_rx(struct milcan_a* interface, struct milcan_frame* frame) {
+  int ret = MILCAN_ERROR_EOF;
+  frame->frame_type = MILCAN_FRAME_TYPE_MESSAGE;
+  frame->mortal = 0;
+  
+  switch(interface->can_interface_type) {
+    case CAN_INTERFACE_CANDO:
+      CANdoRx();
+      if(TRUE == CANdoReadRxQueue(&(frame->frame))) {
+        ret = MILCAN_OK;
+        // interface_handle_rx_message(interface, frame);
+      }
+      break;
+    case CAN_INTERFACE_GSUSB_SO:
+      if(GSUSB_OK == gsusbRead(&interface->ctx, &(frame->frame))) {
+        ret = MILCAN_OK;
+        // interface_handle_rx_message(interface, frame);
+      }
+      break;
   }
-  pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
 
   return ret;
 }
 
-int interface_handle_rx(struct milcan_a* interface) {
-  int ret;
-  // int i = 0;
-  struct milcan_frame frame;
-  frame.mortal = 0;
-  // int toRead = 0;
-
-  switch(interface->can_interface_type) {
-    case CAN_INTERFACE_CANDO:
-      CANdoRx();
-      ret = CANdoReadRxQueue(&(frame.frame));
-      while(ret) {
-        switch(ret) {
-            case MILCAN_OK:
-                interface_handle_rx_message(interface, &frame);
-                break;
-            default:
-            case MILCAN_ERROR:
-                break;
-            case MILCAN_ERROR_CONN_CLOSED:
-                LOGE(TAG, "CAN connection closed.");
-                return MILCAN_ERROR_FATAL;
-        }
-        ret = CANdoReadRxQueue(&(frame.frame));
-      }
-      break;
-    case CAN_INTERFACE_GSUSB_SO:
-      while(GSUSB_OK == gsusbRead(&interface->ctx, &(frame.frame))) {
-        interface_handle_rx_message(interface, &frame);
-      }
-      break;
-  }
-
-  return MILCAN_OK;
-}
-
-void interface_display_mode(struct milcan_a* interface) {
-    switch(interface->mode) {
-    case MILCAN_A_MODE_POWER_OFF:
-        LOGI(TAG, "Mode: Power Off");
-        break;
-    case MILCAN_A_MODE_PRE_OPERATIONAL:
-        LOGI(TAG, "Mode: Pre Operational");
-        break;
-    case MILCAN_A_MODE_OPERATIONAL:
-        LOGI(TAG, "Mode: Operational");
-        break;
-    case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
-        LOGI(TAG, "Mode: System Configuration");
-        break;
-    default:
-        LOGE(TAG, "Mode: Unrecognised (%u)", interface->mode);
-        break;
-    }
-}
+// void interface_display_mode(struct milcan_a* interface) {
+//     switch(interface->mode) {
+//     case MILCAN_A_MODE_POWER_OFF:
+//         LOGI(TAG, "Mode: Power Off");
+//         break;
+//     case MILCAN_A_MODE_PRE_OPERATIONAL:
+//         LOGI(TAG, "Mode: Pre Operational");
+//         break;
+//     case MILCAN_A_MODE_OPERATIONAL:
+//         LOGI(TAG, "Mode: Operational");
+//         break;
+//     case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
+//         LOGI(TAG, "Mode: System Configuration");
+//         break;
+//     default:
+//         LOGE(TAG, "Mode: Unrecognised (%u)", interface->mode);
+//         break;
+//     }
+// }
 
 int interface_tx_add_to_q(struct milcan_a* interface, struct milcan_frame *frame) {
   // Adjust txq functions to accept the interface. DONE
