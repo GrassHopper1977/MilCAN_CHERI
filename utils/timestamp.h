@@ -5,6 +5,8 @@
 
 // Convert milliseconds to nanoseconds
 #define MS_TO_NS(ms) ((ms) * 1000000L)
+// Convert seconds to nanoseconds
+#define SECS_TO_NS(ms) ((ms) * 1000000000L)
 
 /// Get a time stamp in milliseconds.
 extern uint64_t millis();

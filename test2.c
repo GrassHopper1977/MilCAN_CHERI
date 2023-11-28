@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
   }
   LOGI(TAG, "starting...");
 
-  interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, can_interface_type, moduleNumber, MILCAN_A_OPTION_SYNC_MASTER);
+  interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, can_interface_type, moduleNumber, 0);
   if(interface == NULL) {
     LOGE(TAG, "Unable to open interface.");
     tidyBeforeExit();
@@ -180,19 +180,21 @@ int main(int argc, char *argv[])
   
   LOGI(TAG, "Starting loop...");
   struct milcan_frame frame;
-  uint64_t heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS); // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
-  struct milcan_frame heartbeat_frame;
-  heartbeat_frame.mortal = 0;
-  heartbeat_frame.frame.can_id = MILCAN_MAKE_ID(1, 0, 11, 12, localAddress);
-  heartbeat_frame.frame.len = 8;
-  heartbeat_frame.frame.data[0] = 0x00;
-  heartbeat_frame.frame.data[1] = 0x5A;
-  heartbeat_frame.frame.data[2] = 0x01;
-  heartbeat_frame.frame.data[3] = 0x23;
-  heartbeat_frame.frame.data[4] = 0x45;
-  heartbeat_frame.frame.data[5] = 0x67;
-  heartbeat_frame.frame.data[6] = 0x89;
-  heartbeat_frame.frame.data[7] = 0xab;
+  // uint64_t heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS); // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
+  // struct milcan_frame heartbeat_frame;
+  // heartbeat_frame.mortal = 0;
+  // heartbeat_frame.frame.can_id = MILCAN_MAKE_ID(1, 0, 11, 12, localAddress);
+  // heartbeat_frame.frame.len = 8;
+  // heartbeat_frame.frame.data[0] = 0x00;
+  // heartbeat_frame.frame.data[1] = 0x5A;
+  // heartbeat_frame.frame.data[2] = 0x01;
+  // heartbeat_frame.frame.data[3] = 0x23;
+  // heartbeat_frame.frame.data[4] = 0x45;
+  // heartbeat_frame.frame.data[5] = 0x67;
+  // heartbeat_frame.frame.data[6] = 0x89;
+  // heartbeat_frame.frame.data[7] = 0xab;
+  
+  uint64_t config_mode_time = nanos() + SECS_TO_NS(2);
   
   // loop forever
   for (;;) {
@@ -219,12 +221,17 @@ int main(int argc, char *argv[])
           break;
       }
     }
-    if(nanos() > heartbeat_time) {
-      // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
-      heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
-      milcan_send(interface, &heartbeat_frame);
-      heartbeat_frame.frame.data[0]++;
-      heartbeat_frame.frame.data[1] ^= 0xFF;
+    // if(nanos() > heartbeat_time) {
+    //   // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
+    //   heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
+    //   milcan_send(interface, &heartbeat_frame);
+    //   heartbeat_frame.frame.data[0]++;
+    //   heartbeat_frame.frame.data[1] ^= 0xFF;
+    // }
+    if((config_mode_time > 0) && (nanos() > config_mode_time)) {
+      config_mode_time = 0; // Only fires once.
+      LOGI(TAG, "Ask to enter Config Mode.");
+      milcan_change_to_config_mode(interface);
     }
     usleep(SLEEP_TIME_US);
   }

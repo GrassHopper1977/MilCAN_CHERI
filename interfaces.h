@@ -58,6 +58,11 @@ struct milcan_a {
   struct milcan_tx_q tx;        // The output buffer.
   uint64_t sync_slave_time_ns;  // The sync slave time in ns. This is how long we have to wait without a sync before we attempt to take over a sync master.
   uint64_t mode_exit_timer;     // Used to time the various timers to exit the modes.
+  uint8_t config_flags;         // Used to control entry and exit of Config Mode.
+  uint8_t config_counter;       // Which of the config messages we are on.
+  uint64_t config_timer;        // Used for a 1 second timer to Tx the next Enter Config Message Chain
+  uint8_t config_enter_count;   // Count our position through reading the enter config messages.
+  uint64_t config_enter_timeout;// Whole message must be less than 400ms or start again.
 };
 
 // Function definitions

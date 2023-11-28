@@ -69,6 +69,10 @@
 #define MILCAN_FRAME_TYPE_NEW_FRAME             0x02
 #define MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER    0x03
 
+#define MILCAN_CONFIG_MODE_SEQ_NONE   0x00
+#define MILCAN_CONFIG_MODE_SEQ_ENTER  0x01
+#define MILCAN_CONFIG_MODE_SEQ_LEAVE  0x02
+
 /// @brief The MILCAN A frame is standard CAN but with the mortal field (0 means it never expires - anything else is the time in nanoseconds at which it will expire).
 struct milcan_frame {
   uint8_t frame_type;
@@ -292,5 +296,9 @@ void * milcan_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t sourceAddress, 
 void milcan_close(void * interface);
 int milcan_send(void* interface, struct milcan_frame * frame);
 int milcan_recv(void* interface, struct milcan_frame * frame);
+// Start the process of changing to the Configuration Mode.
+void milcan_change_to_config_mode(void* interface);
+// Start the process of leaving the Configuration Mode.
+void milcan_exit_configuration_mode(void* interface);
 
 #endif // __MILCAN_H__

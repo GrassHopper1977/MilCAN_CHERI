@@ -38,6 +38,9 @@
 
 #define TAG "MilCAN"
 
+// Declarations
+int change_mode(struct milcan_a* interface, int mode);
+
 // void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, const char *format, ...) {
 //   FILE * fd = stdout;
 //
@@ -74,6 +77,48 @@
 //   fprintf(fd, "\n");
 // }
 
+void check_config_flags(struct milcan_a* interface) {
+  switch(interface->config_flags) {
+    case MILCAN_CONFIG_MODE_SEQ_ENTER:
+      if(interface->config_counter == 0) {
+        LOGI(TAG, "Sending C %02x", 'C');
+        struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_0(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+      } else if(interface->config_counter == 1) {
+        LOGI(TAG, "Sending F %02x", 'F');
+        struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_1(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+      } else if(interface->config_counter == 2) {
+        LOGI(TAG, "Sending G %02x", 'G');
+        struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_2(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+        change_mode(interface, MILCAN_A_MODE_SYSTEM_CONFIGURATION);
+      }
+      break;
+    case MILCAN_CONFIG_MODE_SEQ_LEAVE:
+      if(interface->config_counter == 0) {
+        struct milcan_frame frame = MILCAN_MAKE_EXIT_CONFIG_0(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+      } else if(interface->config_counter == 1) {
+        struct milcan_frame frame = MILCAN_MAKE_EXIT_CONFIG_1(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+      } else if(interface->config_counter == 2) {
+        struct milcan_frame frame = MILCAN_MAKE_EXIT_CONFIG_2(interface->sourceAddress);
+        interface_send(interface, &frame);  // Sync frames bypass the Tx queue
+        interface->config_counter++;
+        change_mode(interface, MILCAN_A_MODE_PRE_OPERATIONAL);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 int milcan_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame *frame) {
   int ret = MILCAN_OK;
   pthread_mutex_lock(&(interface->rx.rxBufferMutex));
@@ -92,7 +137,8 @@ int milcan_add_to_rx_buffer(struct milcan_a* interface, struct milcan_frame *fra
 }
 
 int notify_new_sync(struct milcan_a* interface) {
-  // Notify application that teh frame has changed.
+  check_config_flags(interface);
+  // Notify application that the frame has changed.
   uint16_t sync = interface->sync;
   struct milcan_frame mode_sync = MILCAN_MAKE_NEW_FRAME(sync);
   return milcan_add_to_rx_buffer(interface, &mode_sync);
@@ -106,29 +152,33 @@ int notify_new_sync_master(struct milcan_a* interface) {
 }
 
 int change_mode(struct milcan_a* interface, int mode) {
-  interface->mode = mode;
-  // Notify application that we've changed mode.
-  struct milcan_frame mode_frame = MILCAN_MAKE_CHANGE_MODE(mode);
-  switch(mode) {
-    default:
-    case MILCAN_A_MODE_POWER_OFF:
-      // Don't do anything. Nothing at all. Nada. Zip. Zilch.
-      break;
-    case MILCAN_A_MODE_PRE_OPERATIONAL:
-      // Start the Sync Slave Timeout Period timer.
-      interface->current_sync_master = 0;
-      interface->mode_exit_timer = nanos() + interface->sync_slave_time_ns;
-      notify_new_sync_master(interface);
-      break;
-    case MILCAN_A_MODE_OPERATIONAL:
-      // Start the 8 PDUs timer that is reset whenever a SYNC is received. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
-      interface->mode_exit_timer = nanos() + (8 * interface->sync_time_ns); 
-      break;
-    case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
-      // Start the 8 second timer that is reset by the enter config mode sequence. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
-      break;
+  if(interface->mode != mode) {
+    interface->mode = mode;
+    // Notify application that we've changed mode.
+    struct milcan_frame mode_frame = MILCAN_MAKE_CHANGE_MODE(mode);
+    switch(mode) {
+      default:
+      case MILCAN_A_MODE_POWER_OFF:
+        // Don't do anything. Nothing at all. Nada. Zip. Zilch.
+        break;
+      case MILCAN_A_MODE_PRE_OPERATIONAL:
+        // Start the Sync Slave Timeout Period timer.
+        interface->current_sync_master = 0;
+        interface->mode_exit_timer = nanos() + interface->sync_slave_time_ns;
+        notify_new_sync_master(interface);
+        break;
+      case MILCAN_A_MODE_OPERATIONAL:
+        // Start the 8 PDUs timer that is reset whenever a SYNC is received. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
+        interface->mode_exit_timer = nanos() + (8 * interface->sync_time_ns); 
+        break;
+      case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
+        // Start the 8 second timer that is reset by the enter config mode sequence. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
+        interface->mode_exit_timer = nanos() + SECS_TO_NS(8); 
+        break;
+    }
+    return milcan_add_to_rx_buffer(interface, &mode_frame);
   }
-  return milcan_add_to_rx_buffer(interface, &mode_frame);
+  return MILCAN_OK;
 }
 
 int send_sync_frame(struct milcan_a* interface) {
@@ -224,6 +274,38 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
           milcan_add_to_rx_buffer(interface, rxframe);
         }
       }
+
+      // Check for Enter Config message sequence (reset mode timeout).
+      if((rxframeValid == MILCAN_OK) && (rxframeIsSelf == FALSE) && ((rxframe->frame.can_id & MILCAN_ID_PRIMARY_MASK) == (MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT << 16)) 
+        && ((rxframe->frame.can_id & MILCAN_ID_SECONDARY_MASK) == (MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG << 8))
+        && (rxframe->frame.len >= 1)) {
+        switch(interface->config_enter_count) {
+          case 0:
+            if(rxframe->frame.data[0] == 'C') {
+              interface->config_enter_count++;
+              interface->config_enter_timeout = now + MS_TO_NS(400);
+            }
+            break;
+          case 1:
+            if(rxframe->frame.data[0] == 'F') {
+              interface->config_enter_count++;
+              interface->config_enter_timeout = now + MS_TO_NS(400);
+            } else {
+              interface->config_enter_count = 0;
+            }
+            break;
+          case 2:
+            if(rxframe->frame.data[0] == 'G') {
+              change_mode(interface, MILCAN_A_MODE_SYSTEM_CONFIGURATION);
+            }
+            interface->config_enter_count = 0;
+            break;
+          default:
+            interface->config_enter_count = 0;
+            break;
+        }
+      }
+
       if((interface->options & MILCAN_A_OPTION_SYNC_MASTER) == MILCAN_A_OPTION_SYNC_MASTER) {
         // We can be sync master.
         // Send a sync if the sync time has 80% expired and if we're higher priority than anything that we've seen so far.
@@ -276,6 +358,37 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
             interface->sourceAddress, interface->sync);
           }
         }
+
+        // Check for Enter Config message sequence (reset mode timeout).
+        if((rxframeIsSelf == FALSE) && ((rxframe->frame.can_id & MILCAN_ID_PRIMARY_MASK) == (MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT << 16)) 
+          && ((rxframe->frame.can_id & MILCAN_ID_SECONDARY_MASK) == (MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG << 8))
+          && (rxframe->frame.len >= 1)) {
+          switch(interface->config_enter_count) {
+            case 0:
+              if(rxframe->frame.data[0] == 'C') {
+                interface->config_enter_count++;
+                interface->config_enter_timeout = now + MS_TO_NS(400);
+              }
+              break;
+            case 1:
+              if(rxframe->frame.data[0] == 'F') {
+                interface->config_enter_count++;
+                interface->config_enter_timeout = now + MS_TO_NS(400);
+              } else {
+                interface->config_enter_count = 0;
+              }
+              break;
+            case 2:
+              if(rxframe->frame.data[0] == 'G') {
+                change_mode(interface, MILCAN_A_MODE_SYSTEM_CONFIGURATION);
+              }
+              interface->config_enter_count = 0;
+              break;
+            default:
+              interface->config_enter_count = 0;
+              break;
+          }
+        }
       }
       if((interface->options & MILCAN_A_OPTION_SYNC_MASTER) == MILCAN_A_OPTION_SYNC_MASTER) {
         // We can be a SYNC MASTER
@@ -310,6 +423,11 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
       if(now >= interface->mode_exit_timer) {
         change_mode(interface, MILCAN_A_MODE_PRE_OPERATIONAL);
       }
+
+      // If we are part way through receiving an Enter Config message but it's not finished in time then reset it.
+      if(now >= interface->config_enter_timeout) {
+        interface->config_enter_count = 0;
+      }
       break;
     case MILCAN_A_MODE_SYSTEM_CONFIGURATION:  // Config Messages only
       // No sync messages.
@@ -317,18 +435,74 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
       // Looking for Exit Config Messages - After successful reception we must exit to Pre-Operational.
       // We always exit to Pre-Operational.
 
-      // TO DO! Check for Exit Config message sequence.
-      // TO DO! Check for Enter Config message sequence.
-      // TO DO! Tx anything that needs Txing and is valid for this mode.
+      // If we initiated CONFIG MODE (check config_flags), then we need to send the Enter Config Message once per sec (reset config_counter to 0 once per second).
+      if((interface->config_flags & MILCAN_CONFIG_MODE_SEQ_ENTER) && (now >= interface->config_timer)) {
+        interface->config_counter = 0;
+        interface->config_timer = now + SECS_TO_NS(1);
+      }
       
       // Save anything to Rx Q that needs saving.
       if(rxframeValid == MILCAN_OK) {
+        if(rxframeIsSelf == FALSE) {
+          // Don't react to our own messages.
+          // Check for Exit Config message sequence (will clear config_flags).
+          if(((rxframe->frame.can_id & MILCAN_ID_PRIMARY_MASK) == (MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT << 16)) 
+            && ((rxframe->frame.can_id & MILCAN_ID_SECONDARY_MASK) == (MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_EXIT_CONFIG << 8))
+            && (rxframe->frame.len >= 3) && (rxframe->frame.data[0] == 'O') && (rxframe->frame.data[1] == 'P') && (rxframe->frame.data[2] == 'R')) {
+              change_mode(interface, MILCAN_A_MODE_PRE_OPERATIONAL); // Exit back to pre-operational.
+          }
+          // Check for Enter Config message sequence (reset mode timeout).
+          if(((rxframe->frame.can_id & MILCAN_ID_PRIMARY_MASK) == (MILCAN_ID_PRIMARY_SYSTEM_MANAGEMENT << 16)) 
+            && ((rxframe->frame.can_id & MILCAN_ID_SECONDARY_MASK) == (MILCAN_ID_SECONDARY_SYSTEM_MANAGEMENT_ENTER_CONFIG << 8))
+            && (rxframe->frame.len >= 1)) {
+            switch(interface->config_enter_count) {
+              case 0:
+                if(rxframe->frame.data[0] == 'C') {
+                  interface->config_enter_count++;
+                  interface->config_enter_timeout = now + MS_TO_NS(400);
+                }
+                break;
+              case 1:
+                if(rxframe->frame.data[0] == 'F') {
+                  interface->config_enter_count++;
+                  interface->config_enter_timeout = now + MS_TO_NS(400);
+                } else {
+                  interface->config_enter_count = 0;
+                }
+                break;
+              case 2:
+                if(rxframe->frame.data[0] == 'G') {
+                  interface->mode_exit_timer = now + SECS_TO_NS(8); // Reset the timer.
+                }
+                interface->config_enter_count = 0;
+                break;
+              default:
+                interface->config_enter_count = 0;
+                break;
+            }
+          }
+        }
+      
         if(((rxframeIsSelf == FALSE) || ((interface->options & MILCAN_A_OPTION_ECHO) && (rxframeIsSelf == TRUE))) &&
           ((rxframeIsControl == FALSE) || ((interface->options & MILCAN_A_OPTION_LISTEN_CONTROL) && (rxframeIsControl == TRUE)))) {
           milcan_add_to_rx_buffer(interface, rxframe);
         }
+
+      }
+
+      // Transmit anything that need transmitting form the Tx Q.
+      qframe = interface_tx_read_q(interface);
+      if(qframe != NULL) {
+        interface_send(interface, qframe);
+        free(qframe);
+        qframe = NULL;
       }
       break;
+  }
+
+  // If we are part way through receiving an Enter Config message but it's not finished in time then reset it.
+  if(now >= interface->config_enter_timeout) {
+    interface->config_enter_count = 0;
   }
 }
 
@@ -421,4 +595,20 @@ int milcan_recv(void* interface, struct milcan_frame * frame) {
   pthread_mutex_unlock(&(i->rx.rxBufferMutex));
 
   return ret;
+}
+
+// Start the process of changing to the Configuration Mode.
+void milcan_change_to_config_mode(void* interface) {
+  struct milcan_a* i = (struct milcan_a*)interface;
+  i->config_flags = MILCAN_CONFIG_MODE_SEQ_ENTER;
+  i->config_counter = 0;
+  i->config_timer = nanos() + SECS_TO_NS(1);
+  i->mode_exit_timer = nanos() + SECS_TO_NS(8); 
+}
+
+// Start the process of leaving the Configuration Mode.
+void milcan_exit_configuration_mode(void* interface) {
+  struct milcan_a* i = (struct milcan_a*)interface;
+  i->config_flags = MILCAN_CONFIG_MODE_SEQ_LEAVE;
+  i->config_counter = 0;
 }
