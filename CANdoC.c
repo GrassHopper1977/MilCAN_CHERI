@@ -328,6 +328,7 @@ int CANdoConnect(u_int16_t deviceNum)
   DeviceType = CANDO_TYPE_UNKNOWN;  // Device type unknown
   NoOfDevices = MAX_NO_OF_DEVICES;  // Max. no. of devices to enumerate
   Status = CANdoGetDevices(CANdoDevices, &NoOfDevices);  // Get a list of the CANdo devices connected
+  printf("Number of CANdo devices available: %u\n", NoOfDevices);
   if(deviceNum >= NoOfDevices) {
     return CANDO_CONNECT_OUT_OF_RANGE;
   }

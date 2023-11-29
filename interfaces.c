@@ -137,7 +137,7 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
             LOGE(TAG, "CANdo is not open!");
             interface = interface_close(interface);
           }
-          if(FALSE == CANdoStart(interface->speed)) {  // Set baud rate to 500k
+          if((interface != NULL) && (FALSE == CANdoStart(interface->speed))) {  // Set baud rate to 500k
             LOGE(TAG, "Unable to set CANdo baud rate!");
             interface = interface_close(interface);
           }
