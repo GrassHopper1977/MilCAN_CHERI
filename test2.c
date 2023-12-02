@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
           break;
       }
     }
-    // if(nanos() > heartbeat_time) {
+    // if((current_mode == MILCAN_A_MODE_OPERATIONAL) && (nanos() > heartbeat_time)) {
     //   // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
     //   heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
     //   milcan_send(interface, &heartbeat_frame);

@@ -182,6 +182,7 @@ int main(int argc, char *argv[])
   struct milcan_frame frame;
   uint64_t heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS); // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
   struct milcan_frame heartbeat_frame;
+  uint16_t current_mode = MILCAN_A_MODE_POWER_OFF;
   heartbeat_frame.mortal = 0;
   heartbeat_frame.frame.can_id = MILCAN_MAKE_ID(1, 0, 11, 12, localAddress);
   heartbeat_frame.frame.len = 8;
@@ -207,6 +208,7 @@ int main(int argc, char *argv[])
           break;
         case MILCAN_FRAME_TYPE_CHANGE_MODE:
           milcan_display_mode(interface);
+          current_mode = frame.frame.can_id;
           break;
         case MILCAN_FRAME_TYPE_NEW_FRAME:
           // printf("Frame: %000x\r", frame.frame.can_id);
@@ -219,7 +221,7 @@ int main(int argc, char *argv[])
           break;
       }
     }
-    if(nanos() > heartbeat_time) {
+    if((current_mode == MILCAN_A_MODE_OPERATIONAL) && (nanos() > heartbeat_time)) {
       // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
       heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
       milcan_send(interface, &heartbeat_frame);

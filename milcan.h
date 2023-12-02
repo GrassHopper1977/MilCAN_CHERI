@@ -15,6 +15,12 @@
 #define MILCAN_ERROR                -1
 #define MILCAN_ERROR_CONN_CLOSED    -2
 
+// System modes as defined in MWG-MILA-001 Rev 3 Section 4.2 (Page 37 of 79)
+#define MILCAN_A_MODE_POWER_OFF             (0) // System is off
+#define MILCAN_A_MODE_PRE_OPERATIONAL       (1) // The only messages that we can send are Sync or Enter Config
+#define MILCAN_A_MODE_OPERATIONAL           (2) // Normal usage
+#define MILCAN_A_MODE_SYSTEM_CONFIGURATION  (3) // Config Messages only
+
 #define MILCAN_ID_MASK              0x1FFFFFFF
 #define MILCAN_ID_PRIORITY_MASK     0x1C000000
 #define MILCAN_ID_MILCAN_TYPE       0x02000000

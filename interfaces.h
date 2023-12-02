@@ -15,12 +15,6 @@
 #define SYNC_PERIOD_20PC(a) (uint64_t)((a) * 0.2)
 #define SYNC_PERIOD_80PC(a) (uint64_t)((a) * 0.8)
 
-// System modes as defined in MWG-MILA-001 Rev 3 Section 4.2 (Page 37 of 79)
-#define MILCAN_A_MODE_POWER_OFF             (0) // System is off
-#define MILCAN_A_MODE_PRE_OPERATIONAL       (1) // The only messages that we can send are Sync or Enter Config
-#define MILCAN_A_MODE_OPERATIONAL           (2) // Normal usage
-#define MILCAN_A_MODE_SYSTEM_CONFIGURATION  (3) // Config Messages only
-
 struct milcan_rx_q {
   pthread_mutex_t rxBufferMutex;  // Mutex to control threaded access to read data buffer.
   struct milcan_frame buffer[RX_BUFFER_SIZE]; // The input buffer.

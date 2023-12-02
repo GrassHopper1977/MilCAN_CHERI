@@ -41,60 +41,25 @@
 // Declarations
 int change_mode(struct milcan_a* interface, int mode);
 
-// void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, const char *format, ...) {
-//   FILE * fd = stdout;
-//
-//   if(err || (frame->can_id & CAN_ERR_FLAG)) {
-//     fd = stderr;
-//   }
-//   fprintf(fd, "%lu:  INFO: %s: %s() line %i: %s: ID: ", nanos(), __FILE__, __FUNCTION__, __LINE__, tag);
-//
-//   if((frame->can_id & CAN_EFF_FLAG) || (frame->can_id & CAN_ERR_FLAG)) {
-//     fprintf(fd, "%08x", frame->can_id & CAN_EFF_MASK);
-//   } else {
-//     fprintf(fd, "     %03x", frame->can_id & CAN_SFF_MASK);
-//   }
-//   fprintf(fd, ", len: %2u", frame->len);
-//   fprintf(fd, ", Data: ");
-//   for(int n = 0; n < CAN_MAX_DLC; n++) {
-//     if(n < frame->len) {
-//       fprintf(fd, "%02x, ", frame->data[n]);
-//     } else {
-//       fprintf(fd, "    ");
-//     }
-//   }
-//
-//   va_list args;
-//   va_start(args, format);
-//
-//   vfprintf(fd, format, args);
-//   va_end(args);
-//
-//   if(frame->can_id & CAN_ERR_FLAG) {
-//     fprintf(fd, ", ERROR FRAME");
-//   }
-//
-//   fprintf(fd, "\n");
-// }
-
 void check_config_flags(struct milcan_a* interface) {
   switch(interface->config_flags) {
     case MILCAN_CONFIG_MODE_SEQ_ENTER:
       if(interface->config_counter == 0) {
-        LOGI(TAG, "Sending C %02x", 'C');
+        // LOGI(TAG, "Sending C %02x", 'C');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_0(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
       } else if(interface->config_counter == 1) {
-        LOGI(TAG, "Sending F %02x", 'F');
+        // LOGI(TAG, "Sending F %02x", 'F');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_1(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
       } else if(interface->config_counter == 2) {
-        LOGI(TAG, "Sending G %02x", 'G');
+        // LOGI(TAG, "Sending G %02x", 'G');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_2(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
+        interface->mode_exit_timer = nanos() + SECS_TO_NS(8);
         change_mode(interface, MILCAN_A_MODE_SYSTEM_CONFIGURATION);
       }
       break;
@@ -160,20 +125,24 @@ int change_mode(struct milcan_a* interface, int mode) {
       default:
       case MILCAN_A_MODE_POWER_OFF:
         // Don't do anything. Nothing at all. Nada. Zip. Zilch.
+        interface->config_flags = 0;
         break;
       case MILCAN_A_MODE_PRE_OPERATIONAL:
         // Start the Sync Slave Timeout Period timer.
         interface->current_sync_master = 0;
         interface->mode_exit_timer = nanos() + interface->sync_slave_time_ns;
         notify_new_sync_master(interface);
+        interface->config_flags = 0;
         break;
       case MILCAN_A_MODE_OPERATIONAL:
         // Start the 8 PDUs timer that is reset whenever a SYNC is received. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
-        interface->mode_exit_timer = nanos() + (8 * interface->sync_time_ns); 
+        interface->mode_exit_timer = nanos() + (8 * interface->sync_time_ns);
+        interface->config_flags = 0;
         break;
       case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
         // Start the 8 second timer that is reset by the enter config mode sequence. If it times out then enter MILCAN_A_MODE_PRE_OPERATIONAL.
-        interface->mode_exit_timer = nanos() + SECS_TO_NS(8); 
+        interface->mode_exit_timer = nanos() + SECS_TO_NS(8);
+        interface->config_timer = nanos() + SECS_TO_NS(1);
         break;
     }
     return milcan_add_to_rx_buffer(interface, &mode_frame);
@@ -434,9 +403,10 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
       // Looking for Enter Config Messages - After 8 seconds without these we must leave to Pre-Operational.
       // Looking for Exit Config Messages - After successful reception we must exit to Pre-Operational.
       // We always exit to Pre-Operational.
-
+      check_config_flags(interface);
       // If we initiated CONFIG MODE (check config_flags), then we need to send the Enter Config Message once per sec (reset config_counter to 0 once per second).
       if((interface->config_flags & MILCAN_CONFIG_MODE_SEQ_ENTER) && (now >= interface->config_timer)) {
+        // LOGI(TAG, "Config timer.");
         interface->config_counter = 0;
         interface->config_timer = now + SECS_TO_NS(1);
       }
@@ -488,6 +458,12 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
           milcan_add_to_rx_buffer(interface, rxframe);
         }
 
+      }
+
+      // Have we had the enter config sequence within 8s? If not, go to PRE-OPERATIONAL mode.
+      if(now >= interface->mode_exit_timer) {
+        // LOGI(TAG, "Exit timer.");
+        change_mode(interface, MILCAN_A_MODE_PRE_OPERATIONAL);
       }
 
       // Transmit anything that need transmitting form the Tx Q.
