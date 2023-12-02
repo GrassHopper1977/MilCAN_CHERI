@@ -32,9 +32,6 @@
 #include "CANdoImport.h"
 #include "CANdoC.h"
 #include "milcan.h"
-// #ifdef __FreeBSD__
-// #include <fcntl.h>
-// #endif
 //------------------------------------------------------------------------------
 // GLOBALS
 //------------------------------------------------------------------------------
@@ -95,7 +92,7 @@ void CANdoCloseAndFinalise() {
 }
 
 //------------------------------------------------------------------------------
-// CANdoInitialise
+// CANdoInitialise2
 //
 // Load the CANdo.dll & map the functions.
 //
@@ -103,7 +100,7 @@ void CANdoCloseAndFinalise() {
 //    FALSE = Error loading DLL or mapping functions
 //    TRUE = DLL loaded & functions all mapped
 //------------------------------------------------------------------------------
-unsigned char CANdoInitialise(void)
+unsigned char CANdoInitialise2(void)
 {
   unsigned char Status;
 
@@ -163,6 +160,7 @@ void CANdoFinalise(void)
 int CANdoMapFunctionPointers(void)
 {
   int MapState;
+  printf("CANdoMapFunctionPointers()\n");
 
   if (DLLHandle != NULL)
   {
@@ -327,62 +325,59 @@ int CANdoConnect(u_int16_t deviceNum)
 
   DeviceType = CANDO_TYPE_UNKNOWN;  // Device type unknown
   NoOfDevices = MAX_NO_OF_DEVICES;  // Max. no. of devices to enumerate
+  CANdoVersion();
   Status = CANdoGetDevices(CANdoDevices, &NoOfDevices);  // Get a list of the CANdo devices connected
   printf("Number of CANdo devices available: %u\n", NoOfDevices);
-  if(deviceNum >= NoOfDevices) {
-    return CANDO_CONNECT_OUT_OF_RANGE;
-  }
+  
   if (Status == CANDO_SUCCESS)
   {
-  	// if (NoOfDevices >= 1)
-		// {
-			// Display a list of devices found
-			printf("%d CANdo Found:\n", NoOfDevices);
-			for (DeviceNo = 0; DeviceNo < NoOfDevices; DeviceNo++)
-			{
-				if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO)
-					printf("%d = CANdo S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-				else
-				if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDOISO)
-					printf("%d = CANdoISO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-				else
-				if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO_AUTO)
-					printf("%d = CANdo AUTO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-				else
-					printf("%d = Type Unknown?\n", DeviceNo + 1);
-			}
-		// }
+    if(deviceNum >= NoOfDevices) {
+      return CANDO_CONNECT_OUT_OF_RANGE;
+    }
+    printf("%d CANdo Found:\n", NoOfDevices);
+    for (DeviceNo = 0; DeviceNo < NoOfDevices; DeviceNo++)
+    {
+      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO)
+        printf("%d = CANdo S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+      else
+      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDOISO)
+        printf("%d = CANdoISO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+      else
+      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO_AUTO)
+        printf("%d = CANdo AUTO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+      else
+        printf("%d = Type Unknown?\n", DeviceNo + 1);
+    }
 
 		if (NoOfDevices > 0)
 		{
 			// At least 1 device found, so connect to 1st device
-      if (CANdoOpen(&CANdoUSB) == CANDO_SUCCESS)
+      // if (CANdoOpen(&CANdoUSB) == CANDO_SUCCESS)
+      if (CANdoOpenDevice(&CANdoUSB, &CANdoDevices[deviceNum]) == CANDO_SUCCESS)
       {
-        // Connection open
+			  // Connection open
         DeviceType = CANdoDevices[deviceNum].HardwareType;
-        strcpy((char *)Description, (char *)CANdoUSB.Description);
-        strcat((char *)Description, " S/N ");
-        strcat((char *)Description, (char *)CANdoUSB.SerialNo);
-        printf("%s connected\n", (char *)Description);
-        return CANDO_CONNECT_OK;
+			  strcpy((char *)Description, (char *)CANdoUSB.Description);
+			  strcat((char *)Description, " S/N ");
+			  strcat((char *)Description, (char *)CANdoUSB.SerialNo);
+			  printf("%s connected\n", (char *)Description);
+			  return CANDO_CONNECT_OK;
       }
 		}
   }
-  else
-  if (Status == CANDO_USB_DLL_ERROR)
+  else if (Status == CANDO_USB_DLL_ERROR)
   {
-    printf("\n CANdo USB DLL not found");
+    printf("CANdo USB DLL not found\n");
     return CANDO_CONNECT_DLL_ERROR;
   }
-  else
-  if (Status == CANDO_USB_DRIVER_ERROR)
+  else if (Status == CANDO_USB_DRIVER_ERROR)
   {
-    printf("\n CANdo driver not found");
+    printf("CANdo driver not found\n");
     return CANDO_CONNECT_USB_DRIVER_ERROR;
   }
   else
   {
-    printf("\n CANdo not found");
+    printf("CANdo not found\n");
     return CANDO_CONNECT_NOT_FOUND;
   }
 
@@ -541,121 +536,9 @@ void CANdoVersion(void)
 
   CANdoGetVersion(&APIVersion, &DLLVersion, &DriverVersion);
 
-  printf("CANdo API DLL v%.1f\n CANdo USB DLL v%.1f\n CANdo driver v%.1f\n",
+  printf(" CANdo API DLL v%.1f\n CANdo USB DLL v%.1f\n CANdo driver v%.1f\n",
     (float)APIVersion / 10, (float)DLLVersion / 10, (float)DriverVersion / 10);
 }
-// //--------------------------------------------------------------------------
-// // CANdoRx
-// //
-// // Receive & display CAN messages.
-// //
-// // Returns -
-// //    Nothing
-// //--------------------------------------------------------------------------
-// void CANdoRx(void)
-// {
-//   static unsigned char FirstTimeRxFlag = TRUE;
-//   static unsigned char FirstTimeStatusFlag = TRUE;
-//   static unsigned char RxDisplayTimer = RX_DISPLAY_TIME;
-//   static unsigned char BusLoadTimer = BUS_LOAD_REQUEST_TIME;
-
-//   // Collect any messages sent by CANdo & store in cyclic buffer
-//   if (CANdoReceive(&CANdoUSB, &CANdoCANBuffer, &CANdoStatus) != CANDO_SUCCESS)
-//     printf("\n Error receiving CAN messages.");
-
-//   // Check display update timer
-//   if (RxDisplayTimer == 0)
-//   {
-//     // Display update period elapsed, so display any received messages
-//     while ((CANdoCANBuffer.ReadIndex != CANdoCANBuffer.WriteIndex) || CANdoCANBuffer.FullFlag)
-//     {
-//       // Display message
-//       if (FirstTimeRxFlag)
-//       {
-//         // 1st time throu', so display header
-//         FirstTimeRxFlag = FALSE;
-//         printf("\n IDE    ID     RTR DLC D1 D2 D3 D4 D5 D6 D7 D8 Timestamp");
-//       }
-
-//       printf("\n  %d  %.8X   %d   %d  %.2X %.2X %.2X %.2X %.2X %.2X %.2X %.2X %d\n >",
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].IDE,
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].ID,
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].RTR,
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].DLC,
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[0],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[1],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[2],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[3],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[4],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[5],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[6],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].Data[7],
-//         CANdoCANBuffer.CANMessage[CANdoCANBuffer.ReadIndex].TimeStamp);
-//       // Move read pointer onto next slot in cyclic buffer
-//       if ((CANdoCANBuffer.ReadIndex + 1) < CANDO_CAN_BUFFER_LENGTH)
-//         CANdoCANBuffer.ReadIndex++;  // Increment index onto next free slot
-//       else
-//         CANdoCANBuffer.ReadIndex = 0;  // Wrap back to start
-
-//       CANdoCANBuffer.FullFlag = FALSE;  // Clear flag as buffer is not full
-//     }
-//     RxDisplayTimer = RX_DISPLAY_TIME;  // Reload timer
-//   }
-//   else
-//     RxDisplayTimer--;  // Decrement timer
-
-//   // Check to see if a new status message sent
-//   switch (CANdoStatus.NewFlag)
-//   {
-//     case CANDO_DEVICE_STATUS :
-//       // New status message received
-//       if (FirstTimeStatusFlag)
-//       {
-//         // 1st time throu', so display header
-//         FirstTimeStatusFlag = FALSE;
-//         printf("\n H/W v.  S/W v.  Status  BusState  Timestamp");
-//       }
-
-//       printf("\n %.1f     %.1f     %.2X      %.2X        %d\n >",
-//         ((float)CANdoStatus.HardwareVersion / 10),
-//         ((float)CANdoStatus.SoftwareVersion / 10),
-//         CANdoStatus.Status,
-//         CANdoStatus.BusState,
-//         CANdoStatus.TimeStamp);
-
-//       CANdoStatus.NewFlag = CANDO_NO_STATUS;  // Clear flag to indicate status read
-//       break;
-
-//     case CANDO_DATE_STATUS :
-//       // New date status message received
-//       printf("\n Date of manufacture %.2d/%.2d/%.2d\n >", CANdoStatus.SoftwareVersion,
-//         CANdoStatus.Status, CANdoStatus.BusState);
-
-//       CANdoStatus.NewFlag = CANDO_NO_STATUS;  // Clear flag to indicate status read
-//       break;
-
-//     case CANDO_BUS_LOAD_STATUS :
-//       // New bus load status message received
-//       printf("\n CAN bus load %.1f%%\n >", (float)(CANdoStatus.HardwareVersion * 10 + CANdoStatus.SoftwareVersion) / 10.0);
-
-//       CANdoStatus.NewFlag = CANDO_NO_STATUS;  // Clear flag to indicate status read
-//       break;
-//   }
-
-//   // Check for CANdoISO device & request bus load as appropriate
-//   if (BusLoadEnableFlag && ((DeviceType == CANDO_TYPE_CANDOISO) || (DeviceType == CANDO_TYPE_CANDO_AUTO)))
-//   {
-//     // CANdoISO/CANdo AUTO device connected, so check request timer
-//     if (BusLoadTimer == 0)
-//     {
-//       // Request bus load status
-//       CANdoRequestBusLoadStatus(&CANdoUSB);
-//       BusLoadTimer = BUS_LOAD_REQUEST_TIME;  // Reload timer
-//     }
-//     else
-//       BusLoadTimer--;  // Decrement timer
-//   }
-// }
 
 #define CAN_ERR_TX_TIMEOUT 0x00000001U   // TX timeout (by netdevice driver)
 #define CAN_ERR_LOSTARB	   0x00000002U   // lost arbitration    / data[0]   
@@ -729,214 +612,3 @@ int CANdoTx(unsigned char idExtended, unsigned int id, unsigned char dlc, unsign
     return TRUE;
   return FALSE;
 }
-
-// //------------------------------------------------------------------------------
-// // GetKey
-// //
-// // Simple non-blocking get key from STDIN.
-// //
-// // Returns -
-// //    Key pressed
-// //------------------------------------------------------------------------------
-// int GetKey(void)
-// {
-//   int Character;
-//   struct termios OriginalTerminalAttr;
-//   struct termios NewTerminalAttr;
-
-//   // Set the terminal to raw mode
-//   tcgetattr(fileno(stdin), &OriginalTerminalAttr);
-//   memcpy(&NewTerminalAttr, &OriginalTerminalAttr, sizeof(struct termios));
-//   NewTerminalAttr.c_cc[VMIN] = 0;
-//   NewTerminalAttr.c_lflag &= ~(ECHO | ICANON);
-//   NewTerminalAttr.c_cc[VTIME] = 0;
-//   tcsetattr(fileno(stdin), TCSANOW, &NewTerminalAttr);
-//   #ifdef __FreeBSD__
-//   int open_flag = fcntl(0, F_GETFL);
-//   if(-1 == fcntl(0, F_SETFL, open_flag | O_NONBLOCK)) {
-//     printf("ERR: Unable to change to NONBLOCK!");
-//   }
-//   char buf[1];
-//   int numRead = read(0, buf, 1);
-//   if(numRead > 0) {
-//     Character = buf[0];
-//   } else {
-//     Character = EOF;
-//   }
-//   // cfmakeraw(&NewTerminalAttr);
-//   if(-1 == fcntl(0, F_SETFL, open_flag)) {
-//     printf("ERR: Unable to reset NONBLOCK!");
-//   }
-//   #else
-
-//   // Read a character from the STDIN stream without blocking
-//   Character = fgetc(stdin);
-//   #endif
-
-
-//   // Restore the original terminal attributes
-//   tcsetattr(fileno(stdin), TCSANOW, &OriginalTerminalAttr);
-//   return Character;
-// }
-// //------------------------------------------------------------------------------
-// // DisplayMenu
-// //
-// // Display the user options menu.
-// //
-// // Returns -
-// //    Nothing
-// //------------------------------------------------------------------------------
-// void DisplayMenu(unsigned char CompleteFlag)
-// {
-//   printf("\n\n Press key for option -");
-//   printf("\n b = Toggle bus load display status");
-//   printf("\n d = Display date status");
-//   printf("\n p = Display device USB PID");
-//   printf("\n s = Display device status");
-//   printf("\n t = Transmit a CAN message");
-//   printf("\n v = Get S/W versions");
-//   printf("\n");
-//   printf("\n ? = Display menu");
-//   printf("\n x = Exit program");
-//   if (CompleteFlag)
-//     printf("\n\n (Received messages are automatically displayed)");
-//   printf("\n >");
-// }
-// //------------------------------------------------------------------------------
-// // main
-// //
-// // Main starting point for program.
-// //
-// // Returns -
-// //    Nothing
-// //------------------------------------------------------------------------------
-// int main(void)
-// {
-// 	unsigned int ID;
-// 	unsigned char Status, Data[8], Key;
-
-// 	printf("\n\n----------------------------------------------------------");
-// 	printf("\n----------------------------------------------------------");
-// 	printf("\n Example program written in 'C' to interface to the CANdo");
-// 	printf("\n device via libCANdo.so - v%.1f", VERSION_NO);
-// 	printf("\n----------------------------------------------------------");
-// 	printf("\n----------------------------------------------------------");
-
-//   // Dynamically load libCANdo.so
-//   Status = CANdoInitialise();
-//   if (Status)
-//   {
-//     // libCANdo.so loaded
-//     CANdoConnect();  // Open a connection to a CANdo device
-//     if (CANdoUSB.OpenFlag)
-//       // CANdo conn. open, so display menu
-//       DisplayMenu(TRUE);  // Display the options menu
-//     CANdoStart();
-// // #ifdef __unix
-// //     printf("\n__unix");
-// // #endif
-// // #ifdef __linux__
-// //     printf("\n__linux__");
-// // #endif
-// // #ifdef __FreeBSD__
-// //     printf("\n__FreeBSD__");
-// // #endif
-//   }
-//   else
-//   {
-//     printf("\n CANdo API library not found");
-//     printf("\n 'x' = Exit program");
-//   }
-
-//   printf("\n");
-
-//   Key = ' ';
-// 	while (Key != 'x')
-// 	{
-// 		Key = GetKey();
-// 	  if (CANdoUSB.OpenFlag)
-// 	  {
-//       switch (Key)
-//       {
-//         case 'b' :
-//           // Toggle bus load request enable
-//           BusLoadEnableFlag ^= 1;
-//           if (BusLoadEnableFlag)
-//             printf("\n Bus load enabled\n >");
-//           else
-//             printf("\n Bus load disabled\n >");
-//           break;
-
-//         case 'd' :
-//           // Get manuf. date status
-//           CANdoGetStatus(CANDO_DATE_STATUS);
-//           break;
-
-//         case 'p' :
-//           // Display CANdo USB PID
-//           CANdoPID();
-//           break;
-
-//         case 's' :
-//           // Get device status
-//           CANdoGetStatus(CANDO_DEVICE_STATUS);
-//           break;
-
-//         case 't' :
-//           if (RunState)
-//           {
-//             // Transmit frame of data
-//             Data[0] = 0x01;
-//             Data[1] = 0x02;
-//             Data[2] = 0x03;
-//             Data[3] = 0x04;
-//             Data[4] = 0x05;
-//             Data[5] = 0x06;
-//             Data[6] = 0x07;
-//             Data[7] = 0x08;
-//             ID = 0x18F00400;
-//             if (CANdoTransmit(&CANdoUSB, CANDO_ID_29_BIT, ID, CANDO_DATA_FRAME, 8, Data, 0, 0) == CANDO_SUCCESS)
-//               printf("\n CAN message transmitted\n >");
-//           }
-//           else
-//             printf("\n CANdo not running\n >");
-//           break;
-
-//         case 'v' :
-//           // Get S/W & driver versions
-//           CANdoVersion();
-//           break;
-
-//         case '?' :
-//           // Display user option menu
-//           DisplayMenu(FALSE);
-//           break;
-//       }
-// 	  }
-
-// 	  if (RunState)
-// 	    // CANdo running, so check for messages periodically
-// 	    CANdoRx();
-
-//     usleep(SLEEP_TIME);  // Sleep for 10ms
-// 	}
-
-// 	if (CANdoUSB.OpenFlag)
-// 	{
-// 	  // Stop CANdo & close connection
-// 	  CANdoStop();
-// 	  CANdoClose(&CANdoUSB);
-// 	}
-
-//   // Unload library
-//   CANdoFinalise();
-
-// 	printf("\n CANdo closed");
-//   printf("\n----------------------------------------------------------");
-//   printf("\n----------------------------------------------------------");
-//   printf("\n");
-
-//   return 0;
-// }
-// //------------------------------------------------------------------------------
-// //------------------------------------------------------------------------------

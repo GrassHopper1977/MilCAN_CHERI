@@ -101,23 +101,6 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
       interface->tx.tx_queue[i] = NULL;
     }
 
-    // // Calculate the minimum sync slave time
-    // uint64_t bit_rate_in_ns;
-    // switch(speed) {
-    //   case MILCAN_A_250K:
-    //     bit_rate_in_ns = 1000000000L/250000;
-    //     break;
-    //   default:
-    //   case MILCAN_A_500K:
-    //     bit_rate_in_ns = 1000000000L/500000;
-    //     break;
-    //   case MILCAN_A_1M:
-    //     bit_rate_in_ns = 1000000000L/1000000;
-    //     break;
-    // }
-    // interface->sync_slave_time_ns = (bit_rate_in_ns * (MAX_BITS_PER_FRAME * 2)) + interface->sync_time_ns;
-
-
     LOGI(TAG, "Sync Frame Frequency requested %u", interface->sync_freq_hz);
     LOGI(TAG, "Sync Frame period calculated %lu", interface->sync_time_ns);
     // LOGI(TAG, "Sync Slave timeout period %lu", interface->sync_slave_time_ns);
@@ -128,7 +111,8 @@ struct milcan_a* interface_open(uint8_t speed, uint16_t sync_freq_hz, uint8_t so
     {
       case CAN_INTERFACE_CANDO:
         LOGI(TAG, "Opening CANdo (%u)...", moduleNumber);
-        unsigned char status = CANdoInitialise();
+        // unsigned char status = CANdoInitialise();
+        unsigned char status = CANdoInitialise2();
         if(status) {
           CANdoConnect(moduleNumber);  // Open a connection to a CANdo device
           if(CANdoUSBStatus()->OpenFlag) {

@@ -1,5 +1,6 @@
+# CFLAGS = -g -O2 -Wall
 CFLAGS = -g -O2 -Wall -cheri-bounds=subobject-safe
-LFLAGS = -lGSUSB
+LFLAGS = -lGSUSB -ldl
 LIBFLAGS= -fPIC -shared
 PURECAP = -mabi=purecap
 HYBRID = -mabi=aapcs

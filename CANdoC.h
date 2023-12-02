@@ -43,21 +43,21 @@
 //------------------------------------------------------------------------------
 // PROTOTYPES
 //------------------------------------------------------------------------------
-extern TCANdoUSB* CANdoUSBStatus();
-extern void CANdoCloseAndFinalise();
-extern unsigned char CANdoInitialise(void);
-extern void CANdoFinalise(void);
-extern int CANdoTx(unsigned char idExtended, unsigned int id, unsigned char dlc, unsigned char * data);
-extern int CANdoMapFunctionPointers(void);
-extern void CANdoUnmapFunctionPointers(void);
-extern int CANdoConnect(u_int16_t deviceNum);
-extern int CANdoStart(unsigned char baudrate);
-extern void CANdoStop(void);
-extern void CANdoGetStatus(unsigned char);
-extern void CANdoPID(void);
-extern void CANdoVersion(void);
-extern int CANdoRx(void);
-extern int CANdoReadRxQueue(struct can_frame *frame);
+TCANdoUSB* CANdoUSBStatus();
+void CANdoCloseAndFinalise();
+unsigned char CANdoInitialise2(void);
+void CANdoFinalise(void);
+int CANdoTx(unsigned char idExtended, unsigned int id, unsigned char dlc, unsigned char * data);
+int CANdoMapFunctionPointers(void);
+void CANdoUnmapFunctionPointers(void);
+int CANdoConnect(u_int16_t deviceNum);
+int CANdoStart(unsigned char baudrate);
+void CANdoStop(void);
+void CANdoGetStatus(unsigned char);
+void CANdoPID(void);
+void CANdoVersion(void);
+int CANdoRx(void);
+int CANdoReadRxQueue(struct can_frame *frame);
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 #endif
