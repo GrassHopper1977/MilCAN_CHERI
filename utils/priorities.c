@@ -6,7 +6,7 @@
 #include <sys/rtprio.h>
 
 #include "priorities.h"
-#define LOG_LEVEL 3
+// #define LOG_LEVEL 3
 #include "logs.h"
 
 #define TAG "Priorities"

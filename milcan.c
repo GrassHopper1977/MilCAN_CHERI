@@ -25,7 +25,7 @@
 #include <pthread.h>
 
 
-#define LOG_LEVEL 3
+// #define LOG_LEVEL 3
 #include "utils/logs.h"
 #include "utils/timestamp.h"
 #include "utils/priorities.h"
@@ -285,7 +285,8 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
           notify_new_sync_master(interface);
         }
         // Send a sync if the sync time has 99% expired and we're already the highest priority seen so far.
-        if((now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) && (interface->sourceAddress == interface->current_sync_master)) {
+        // if((now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) && (interface->sourceAddress == interface->current_sync_master)) {
+        if((now >= interface->syncTimer) && (interface->sourceAddress == interface->current_sync_master)) {
           send_sync_frame(interface);
           notify_new_sync(interface);
         }
@@ -363,7 +364,8 @@ void doStateMachine(struct milcan_a* interface, int rxframeValid, struct milcan_
         // We can be a SYNC MASTER
         if(interface->current_sync_master == interface->sourceAddress) {
           // We are the current SYNC MASTER - Tx at 99% PTU (we've found that seems to work best).
-          if(now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) {
+          // if(now >= (interface->syncTimer - SYNC_PERIOD_1PC(interface->sync_time_ns))) {
+          if(now >= interface->syncTimer) {
             send_sync_frame(interface);
             interface->mode_exit_timer = now + (8 * interface->sync_time_ns);
             notify_new_sync(interface);

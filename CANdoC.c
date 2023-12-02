@@ -160,7 +160,6 @@ void CANdoFinalise(void)
 int CANdoMapFunctionPointers(void)
 {
   int MapState;
-  printf("CANdoMapFunctionPointers()\n");
 
   if (DLLHandle != NULL)
   {
@@ -319,35 +318,36 @@ void CANdoUnmapFunctionPointers(void)
 //--------------------------------------------------------------------------
 int CANdoConnect(u_int16_t deviceNum)
 {
-  unsigned int NoOfDevices, Status, DeviceNo;
+  unsigned int NoOfDevices, Status;
+  // unsigned int DeviceNo;
   TCANdoDevice CANdoDevices[MAX_NO_OF_DEVICES];
   TCANdoDeviceString Description;
 
   DeviceType = CANDO_TYPE_UNKNOWN;  // Device type unknown
   NoOfDevices = MAX_NO_OF_DEVICES;  // Max. no. of devices to enumerate
-  CANdoVersion();
+  // CANdoVersion();
   Status = CANdoGetDevices(CANdoDevices, &NoOfDevices);  // Get a list of the CANdo devices connected
-  printf("Number of CANdo devices available: %u\n", NoOfDevices);
+  // printf("Number of CANdo devices available: %u\n", NoOfDevices);
   
   if (Status == CANDO_SUCCESS)
   {
     if(deviceNum >= NoOfDevices) {
       return CANDO_CONNECT_OUT_OF_RANGE;
     }
-    printf("%d CANdo Found:\n", NoOfDevices);
-    for (DeviceNo = 0; DeviceNo < NoOfDevices; DeviceNo++)
-    {
-      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO)
-        printf("%d = CANdo S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-      else
-      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDOISO)
-        printf("%d = CANdoISO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-      else
-      if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO_AUTO)
-        printf("%d = CANdo AUTO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
-      else
-        printf("%d = Type Unknown?\n", DeviceNo + 1);
-    }
+    // printf("%d CANdo Found:\n", NoOfDevices);
+    // for (DeviceNo = 0; DeviceNo < NoOfDevices; DeviceNo++)
+    // {
+    //   if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO)
+    //     printf("%d = CANdo S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+    //   else
+    //   if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDOISO)
+    //     printf("%d = CANdoISO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+    //   else
+    //   if (CANdoDevices[DeviceNo].HardwareType == CANDO_TYPE_CANDO_AUTO)
+    //     printf("%d = CANdo AUTO S/N %s\n", DeviceNo + 1, CANdoDevices[DeviceNo].SerialNo);
+    //   else
+    //     printf("%d = Type Unknown?\n", DeviceNo + 1);
+    // }
 
 		if (NoOfDevices > 0)
 		{

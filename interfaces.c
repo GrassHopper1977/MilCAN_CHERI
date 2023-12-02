@@ -23,7 +23,7 @@
 #include <pthread.h>
 #include "interfaces.h"
 #include "txq.h"
-#define LOG_LEVEL 3
+// #define LOG_LEVEL 3
 #include "utils/logs.h"
 #include "utils/timestamp.h"
 #include "CANdoImport.h"
@@ -284,23 +284,6 @@ uint16_t interface_rx_buffer_size(struct milcan_a* interface) {
 
   return ret;
 }
-
-// // Returns 1 if we've read a message from the buffer, else 0.
-// int interface_recv(struct milcan_a* interface, struct milcan_frame *frame) {
-//   int ret = 0;
-//   pthread_mutex_lock(&(interface->rx.rxBufferMutex));
-//   if(interface->rx.write_offset > 0) {
-//     memcpy(frame, &(interface->rx.buffer[0]), sizeof(struct milcan_frame));
-//     memmove(&(interface->rx.buffer[0]), &(interface->rx.buffer[1]), sizeof(struct milcan_frame) * (RX_BUFFER_SIZE  -1));
-//     if(interface->rx.write_offset > 0) {  // We shouldn't have to to check but memory errors suck so I'll check.
-//       interface->rx.write_offset--;
-//     }
-//     ret = 1;
-//   }
-//   pthread_mutex_unlock(&(interface->rx.rxBufferMutex));
-
-//   return ret;
-// }
 
 // Check the interface queue and return anything found.
 int interface_handle_rx(struct milcan_a* interface, struct milcan_frame* frame) {

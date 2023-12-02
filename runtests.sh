@@ -1,0 +1,12 @@
+./tests_pc 1 0
+./tests_hy 2 0
+./tests_pc 3 1
+./tests_hy 4 1
+./tests_pc 5 2
+./tests_hy 6 2
+./tests_pc 7 3
+./tests_hy 8 3
+./tests_pc 9 4
+./tests_hy 10 4
+./tests_pc 11 5
+./tests_hy 12 5

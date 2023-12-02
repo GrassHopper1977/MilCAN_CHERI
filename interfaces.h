@@ -11,6 +11,7 @@
 
 #define MILCAN_A_SYNC_COUNT_MASK        (0x03FF)    // 0 to 1023
 #define SYNC_PERIOD_0_5PC(a) (uint64_t)((a) * 0.005)
+#define SYNC_PERIOD_PC(a, b) (uint64_t)((a) * (b))
 #define SYNC_PERIOD_1PC(a) (uint64_t)((a) * 0.01)
 #define SYNC_PERIOD_20PC(a) (uint64_t)((a) * 0.2)
 #define SYNC_PERIOD_80PC(a) (uint64_t)((a) * 0.8)
