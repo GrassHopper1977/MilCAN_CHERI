@@ -344,7 +344,7 @@ void timingRecord(struct timing* timing, uint64_t now) {
 
 void timingResults(struct timing* timing) {
   printf("    Total samples: %u\n", timing->totalSamples);
-  printf("    Target period: %luns +/- %f%%\n", timing->targetPeriod, timing->tolerance);
+  printf("    Target period: %luns +/-%i%%\n", timing->targetPeriod, (uint16_t)(100 * timing->tolerance));
   printf("Min Target period: %luns\n", timing->tolm1);
   printf("Max Target period: %luns\n", timing->tolp1);
   printf("   Average period: %luns\n", timing->average);
