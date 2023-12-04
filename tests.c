@@ -358,6 +358,25 @@ void timingResults(struct timing* timing) {
   printf("             > 3%%: %u\n", timing->tolhighcnt);
 }
 
+int timingPass(struct timing* timing, double passPercent) {
+  int ret = EXIT_SUCCESS;
+  uint32_t passes = timing->tolm1cnt + timing->tolp1cnt;
+  uint32_t fails = timing->tollowcnt + timing->tolm3cnt + timing->tolm2cnt + timing->tolp2cnt + timing->tolp3cnt + timing->tolhighcnt;
+  // float pcPasses = (100.0 / timing->totalSamples) * passes;
+  // float pcFails = (100.0 / timing->totalSamples) * fails;
+  double pcPasses = ((double)passes) / timing->totalSamples;
+  double pcFails = ((double)fails) / timing->totalSamples;
+  printf("Total Passes: %0.02f%% (%u/%u)\n", pcPasses * 100, passes, timing->totalSamples);
+  printf(" Total Fails: %0.02f%% (%u/%u)\n", pcFails * 100, fails, timing->totalSamples);
+  if(pcPasses > passPercent) {
+    printf("Test passed.\n");
+  } else {
+    printf("Test passed.\n");
+    ret = EXIT_FAILURE;
+  }
+  return ret;
+}
+
 void printDeviceType(uint8_t devicetype) {
   switch(devicetype) {
     case CAN_INTERFACE_CANDO:
@@ -535,13 +554,22 @@ int test0(uint8_t testNo, uint16_t syncFreqHz, uint8_t device0heartbeatFreqHz, u
   printf("Total sync frames received: %lu\n", total_sync_frames);
   printf("Sync Frame Timing\n");
   timingResults(&sync_timing);
+  if(EXIT_FAILURE == timingPass(&sync_timing, 0.95)) {
+    ret = EXIT_FAILURE;
+  }
   if(device0heartbeatFreqHz > 0) {
     printf("Device 0 Heartbeat Timing\n");
     timingResults(&heartbeat0_timing);
+    if(EXIT_FAILURE == timingPass(&heartbeat0_timing, 0.95)) {
+      ret = EXIT_FAILURE;
+    }
   }
   if(device1heartbeatFreqHz > 0) {
     printf("Device 1 Heartbeat Timing\n");
     timingResults(&heartbeat1_timing);
+    if(EXIT_FAILURE == timingPass(&heartbeat1_timing, 0.95)) {
+      ret = EXIT_FAILURE;
+    }
   }
   return ret;
 }
