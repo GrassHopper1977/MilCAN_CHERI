@@ -120,10 +120,10 @@ int change_mode(struct milcan_a* interface, int mode) {
   if(interface->mode != mode) {
     interface->mode = mode;
     // Notify application that we've changed mode.
-    struct milcan_frame mode_frame = MILCAN_MAKE_CHANGE_MODE(mode);
     switch(mode) {
       default:
       case MILCAN_A_MODE_POWER_OFF:
+        mode = MILCAN_A_MODE_POWER_OFF;
         // Don't do anything. Nothing at all. Nada. Zip. Zilch.
         interface->config_flags = 0;
         break;
@@ -145,6 +145,7 @@ int change_mode(struct milcan_a* interface, int mode) {
         interface->config_timer = nanos() + SECS_TO_NS(1);
         break;
     }
+    struct milcan_frame mode_frame = MILCAN_MAKE_CHANGE_MODE(mode);
     return milcan_add_to_rx_buffer(interface, &mode_frame);
   }
   return MILCAN_OK;

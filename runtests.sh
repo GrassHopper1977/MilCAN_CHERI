@@ -10,3 +10,14 @@
 ./tests_hy 10 4
 ./tests_pc 11 5
 ./tests_hy 12 5
+./tests_pc 13 6
+./tests_hy 14 6
+./tests_pc 15 7
+./tests_hy 16 7
+./tests_pc 17 8
+./tests_hy 18 8
+./tests_pc 19 9
+./tests_hy 20 9
+./tests_pc 21 A
+./tests_hy 22 A
+
