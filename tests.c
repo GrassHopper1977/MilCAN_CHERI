@@ -34,8 +34,6 @@
 #define HEARTBEAT_PERIOD_MS 100
 
 
-// struct milcan_a* interface = NULL;
-
 void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, const char *format, ...) {
   FILE * fd = stdout;
 
@@ -71,171 +69,6 @@ void print_can_frame(const char* tag, struct can_frame *frame, uint8_t err, cons
 
   fprintf(fd, "\n");
 }
-
-// void tidyBeforeExit() {
-//   milcan_close(interface);
-// }
-
-// void diep(const char *s) {
-//   perror(s); 
-//   tidyBeforeExit();
-//   exit(EXIT_FAILURE);
-// }
-
-// void sigint_handler(int sig) {
-//   printf("\n%s: Signal received (%i).\n", __FILE__, sig);
-//   fflush(stdout);
-//   fflush(stderr);
-//   if(sig == SIGINT) {
-//     tidyBeforeExit();
-//     // Make sure the signal is passed down the line correctly.
-//     signal(SIGINT, SIG_DFL);
-//     kill(getpid(), SIGINT);
-//   }
-// }
-
-
-// int testx(int argc, char *argv[])
-// {
-//   // // Create the signal handler here - ensures that Ctrl-C gets passed back up to 
-//   // signal(SIGINT, sigint_handler);
-
-//   int result;
-//   uint8_t localAddress = 0;
-//   uint8_t can_interface_type = CAN_INTERFACE_NONE;
-//   uint16_t moduleNumber = 0;
-  
-//   printf("MilCAN Test\n\n");
-
-//   // check argument count
-//   if (argc != 3) {
-//     fprintf(stderr, "usage: %s a<address> c<CANdo> | g<GSUSB>\n", argv[0]);
-//     fprintf(stderr, "   <address> - The MilCAN device's ID in the range 1-255\n");
-//     fprintf(stderr, "   <CANdo> - The module number of the CANdo module. They are normally numbered in the order that you plugged them in.\n");
-//     fprintf(stderr, "   <GSUSB> - The module number of the GSUSB compatible module. They are normally numbered in the order that you plugged them in.\n");
-//     fprintf(stderr, "Note: You should only attempt to connect to one module at a time. Including both options 'c' and 'g' may cause unexpected results.\n");
-//     tidyBeforeExit();
-//     exit(EXIT_FAILURE);
-//   }
-  
-//   unsigned long tempLong;
-//   // size_t tempLen;
-//   for(int i = 1; i < argc; i++) {
-//     switch(argv[i][0]) {
-//     case 'a':
-//       tempLong = strtoul(&argv[i][1], NULL, 10);
-//       if((tempLong > 255) || (tempLong < 1)) {
-//         LOGE(TAG, "The local address is invalid. You must define a device address between 0 and 255.");
-//         tidyBeforeExit();
-//         exit(EXIT_FAILURE);
-//       }
-//       localAddress = (uint8_t)tempLong;
-//       break;
-//     case 'c': // A CANdo module's number.
-//       tempLong = strtoul(&argv[i][1], NULL, 10);
-//       if((tempLong > 9) || (tempLong < 0)) {
-//         LOGE(TAG, "The CANdo number is invalid. You must choose a device number between 0 and 9.");
-//         tidyBeforeExit();
-//         exit(EXIT_FAILURE);
-//       }
-//       moduleNumber = (uint16_t)tempLong;
-//       LOGI(TAG, "Use CANdo device: %u", moduleNumber);
-//       can_interface_type = CAN_INTERFACE_CANDO;
-//       break;
-//     case 'g': // A GSUSB module's number.
-//       tempLong = strtoul(&argv[i][1], NULL, 10);
-//       moduleNumber = (uint16_t)tempLong;
-//       LOGI(TAG, "Use GSUSB device: %u", moduleNumber);
-//       can_interface_type = CAN_INTERFACE_GSUSB_SO;
-//       break;
-//     default:
-//       LOGE(TAG, "Unrecognised option '%c'!", argv[i][0]);
-//       tidyBeforeExit();
-//       exit(EXIT_FAILURE);
-//       break;
-//     }
-//   }
-
-//   if(localAddress == 0) {
-//     LOGE(TAG, "The local address is invalid. You must define a device address between 0 and 255.");
-//     tidyBeforeExit();
-//     exit(EXIT_FAILURE);
-//   }
-//   if(can_interface_type == CAN_INTERFACE_NONE) {
-//     LOGE(TAG, "The CAN connection point has not been defined. You must choose a method to talk to a CAN device.");
-//     tidyBeforeExit();
-//     exit(EXIT_FAILURE);
-//   }
-//   LOGI(TAG, "starting...");
-
-//   interface = milcan_open(MILCAN_A_500K, MILCAN_A_500K_DEFAULT_SYNC_HZ, localAddress, can_interface_type, moduleNumber, 0);
-//   if(interface == NULL) {
-//     LOGE(TAG, "Unable to open interface.");
-//     tidyBeforeExit();
-//     exit(EXIT_FAILURE);
-//   }
-  
-//   LOGI(TAG, "Starting loop...");
-//   struct milcan_frame frame;
-//   // uint64_t heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS); // Send the heartbeat signal every HEARTBEAT_PERIOD_MS ms.
-//   // struct milcan_frame heartbeat_frame;
-//   // heartbeat_frame.mortal = 0;
-//   // heartbeat_frame.frame.can_id = MILCAN_MAKE_ID(1, 0, 11, 12, localAddress);
-//   // heartbeat_frame.frame.len = 8;
-//   // heartbeat_frame.frame.data[0] = 0x00;
-//   // heartbeat_frame.frame.data[1] = 0x5A;
-//   // heartbeat_frame.frame.data[2] = 0x01;
-//   // heartbeat_frame.frame.data[3] = 0x23;
-//   // heartbeat_frame.frame.data[4] = 0x45;
-//   // heartbeat_frame.frame.data[5] = 0x67;
-//   // heartbeat_frame.frame.data[6] = 0x89;
-//   // heartbeat_frame.frame.data[7] = 0xab;
-  
-//   uint64_t config_mode_time = nanos() + SECS_TO_NS(2);
-  
-//   // loop forever
-//   for (;;) {
-//     result = milcan_recv(interface, &frame);
-//     if(result < MILCAN_ERROR_FATAL) {
-//       LOGE(TAG, "MILCAN_ERROR_FATAL...");
-//       exit(EXIT_FAILURE);
-//     } else if(result > 0) {
-//       switch(frame.frame_type) {
-//         case MILCAN_FRAME_TYPE_MESSAGE:
-//           print_can_frame(TAG, &(frame.frame), 0, "Mesage In");
-//           break;
-//         case MILCAN_FRAME_TYPE_CHANGE_MODE:
-//           milcan_display_mode(interface);
-//           break;
-//         case MILCAN_FRAME_TYPE_NEW_FRAME:
-//           // printf("Frame: %000x\r", frame.frame.can_id);
-//           break;
-//         case MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER:
-//           LOGI(TAG, "Sync Master is %02x.", frame.frame.can_id);
-//           break;
-//         default:
-//           LOGE(TAG, "Unknown MilCAN frame type (0x%02x)", frame.frame_type);
-//           break;
-//       }
-//     }
-//     // if((current_mode == MILCAN_A_MODE_OPERATIONAL) && (nanos() > heartbeat_time)) {
-//     //   // heartbeat_time = nanos() + MS_TO_NS(HEARTBEAT_PERIOD_MS);
-//     //   heartbeat_time += MS_TO_NS(HEARTBEAT_PERIOD_MS);
-//     //   milcan_send(interface, &heartbeat_frame);
-//     //   heartbeat_frame.frame.data[0]++;
-//     //   heartbeat_frame.frame.data[1] ^= 0xFF;
-//     // }
-//     if((config_mode_time > 0) && (nanos() > config_mode_time)) {
-//       config_mode_time = 0; // Only fires once.
-//       LOGI(TAG, "Ask to enter Config Mode.");
-//       milcan_change_to_config_mode(interface);
-//     }
-//     usleep(SLEEP_TIME_US);
-//   }
-
-//   tidyBeforeExit();
-//   return EXIT_SUCCESS;
-// }
 
 void* device0 = NULL;
 void* device1 = NULL;
@@ -322,6 +155,7 @@ void timingRecord(struct timing* timing, uint64_t now) {
       if(diff > timing->max) timing->max = diff;
     }
     if(diff < timing->tolm3) {
+      // printf("  total samples = %u  \n", timing->totalSamples);
       timing->tollowcnt++;
     } else if(diff < timing->tolm2) {
       timing->tolm3cnt++;
@@ -470,6 +304,8 @@ int test0(uint8_t testNo, uint16_t syncFreqHz, uint8_t device0heartbeatFreqHz, u
   }
 
   // Main Loop
+  heartbeat_time0 = nanos() + device0heartbeatPeriodNs;
+  heartbeat_time1 = nanos() + device1heartbeatPeriodNs;
   uint64_t test_started = nanos();
   while (total_sync_frames < (noResults + 1)) {
     result = milcan_recv(device0, &framein0);
@@ -688,6 +524,8 @@ int test1(uint8_t testNo, uint16_t syncFreqHz,
   }
 
   // Main Loop
+  heartbeat_time0 = nanos() + device0heartbeatPeriodNs;
+  heartbeat_time1 = nanos() + device1heartbeatPeriodNs;
   uint64_t test_started = nanos();
   while (total_sync_frames < (noResults + 1)) {
     result = milcan_recv(device0, &framein0);
@@ -942,6 +780,8 @@ int test2(uint8_t testNo, uint16_t syncFreqHz,
   }
 
   // Main Loop
+  heartbeat_time0 = nanos() + device0heartbeatPeriodNs;
+  heartbeat_time1 = nanos() + device1heartbeatPeriodNs;
   uint64_t test_started = nanos();
   uint64_t time_elapsed = nanos() + SECS_TO_NS(5);
   while (total_sync_frames < (noResults + 1)) {
@@ -1544,7 +1384,7 @@ int test4(uint8_t testNo, uint16_t syncFreqHz,
   uint64_t timer_sys_config = 0;
   while (totaltimens > nanos()) {
     if((time_elapsed > 0) && (nanos() >= time_elapsed)) {
-      printf("\nSwitch to SYSTEM CONFIGURATION mode.\n");
+      printf("\nDevice 2: Switch to SYSTEM CONFIGURATION mode.\n");
       time_elapsed = 0;
       milcan_change_to_config_mode(device2);
     }
@@ -1554,7 +1394,7 @@ int test4(uint8_t testNo, uint16_t syncFreqHz,
       milcan_exit_configuration_mode(device2);
     }
     if((disconnecttimens > 0) && (nanos() >= disconnecttimens)) {
-      printf("\nClose Device 3\n");
+      printf("\nClose Device 2\n");
       disconnecttimens = 0;
       milcan_close(device2);  // Device 2: Close
       if(current_mode != MILCAN_A_MODE_SYSTEM_CONFIGURATION) {
@@ -1575,12 +1415,30 @@ int test4(uint8_t testNo, uint16_t syncFreqHz,
             break;
           case MILCAN_FRAME_TYPE_CHANGE_MODE:
             // milcan_display_mode(device0);
+            switch(current_mode) {
+              case MILCAN_A_MODE_POWER_OFF:
+                printf("Device 0: New mode: POWER OFF\n");
+                break;
+              case MILCAN_A_MODE_PRE_OPERATIONAL:
+                printf("Device 0: New mode: PRE OPERATIONAL\n");
+                break;
+              case MILCAN_A_MODE_OPERATIONAL:
+                printf("Device 0: New mode: OPERATIONAL\n");
+                break;
+              case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
+                printf("Device 0: New mode: SYSTEM_CONFIGURATION\n");
+                timer_sys_config = nanos() + SECS_TO_NS(1);
+                break;
+              default:
+                printf("Device 0: New mode: UNKNOWN (%u)\n", current_mode);
+                break;
+            }
             break;
           case MILCAN_FRAME_TYPE_NEW_FRAME:
             // printf("Frame: %000x\r", framein0.frame.can_id);
             break;
           case MILCAN_FRAME_TYPE_CHANGE_SYNC_MASTER:
-            // printf("\nDevice 0: Sync Master is %02x.\n", framein0.frame.can_id);
+            printf("\nDevice 0: Sync Master is %02x.\n", framein0.frame.can_id);
             // current_sync_master = framein0.frame.can_id;
             break;
           default:
@@ -1605,20 +1463,20 @@ int test4(uint8_t testNo, uint16_t syncFreqHz,
             current_mode = framein1.frame.can_id;
             switch(current_mode) {
               case MILCAN_A_MODE_POWER_OFF:
-                printf("New mode: POWER OFF\n");
+                printf("Device 1: New mode: POWER OFF\n");
                 break;
               case MILCAN_A_MODE_PRE_OPERATIONAL:
-                printf("New mode: PRE OPERATIONAL\n");
+                printf("Device 1: New mode: PRE OPERATIONAL\n");
                 break;
               case MILCAN_A_MODE_OPERATIONAL:
-                printf("New mode: OPERATIONAL\n");
+                printf("Device 1: New mode: OPERATIONAL\n");
                 break;
               case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
-                printf("New mode: SYSTEM_CONFIGURATION\n");
-                timer_sys_config = nanos() + SECS_TO_NS(1);
+                printf("Device 1: New mode: SYSTEM_CONFIGURATION\n");
+                // timer_sys_config = nanos() + SECS_TO_NS(1);
                 break;
               default:
-                printf("New mode: UNKNOWN (%u)\n", current_mode);
+                printf("Device 1: New mode: UNKNOWN (%u)\n", current_mode);
                 break;
             }
             break;
@@ -1652,7 +1510,25 @@ int test4(uint8_t testNo, uint16_t syncFreqHz,
             break;
           case MILCAN_FRAME_TYPE_CHANGE_MODE:
             milcan_display_mode(device2);
-            current_mode = framein2.frame.can_id;
+            // current_mode = framein2.frame.can_id;
+            switch(current_mode) {
+              case MILCAN_A_MODE_POWER_OFF:
+                printf("Device 2: New mode: POWER OFF\n");
+                break;
+              case MILCAN_A_MODE_PRE_OPERATIONAL:
+                printf("Device 2: New mode: PRE OPERATIONAL\n");
+                break;
+              case MILCAN_A_MODE_OPERATIONAL:
+                printf("Device 2: New mode: OPERATIONAL\n");
+                break;
+              case MILCAN_A_MODE_SYSTEM_CONFIGURATION:
+                printf("Device 2: New mode: SYSTEM_CONFIGURATION\n");
+                // timer_sys_config = nanos() + SECS_TO_NS(1);
+                break;
+              default:
+                printf("Device 2: New mode: UNKNOWN (%u)\n", current_mode);
+                break;
+            }
             break;
           case MILCAN_FRAME_TYPE_NEW_FRAME:
             // LOGI(TAG, "Frame: %000x\r", framein1.frame.can_id);

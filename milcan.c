@@ -45,17 +45,17 @@ void check_config_flags(struct milcan_a* interface) {
   switch(interface->config_flags) {
     case MILCAN_CONFIG_MODE_SEQ_ENTER:
       if(interface->config_counter == 0) {
-        // LOGI(TAG, "Sending C %02x", 'C');
+        // printf(" Sending C (%02x) ", 'C');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_0(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
       } else if(interface->config_counter == 1) {
-        // LOGI(TAG, "Sending F %02x", 'F');
+        // printf(" Sending F (%02x) ", 'F');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_1(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
       } else if(interface->config_counter == 2) {
-        // LOGI(TAG, "Sending G %02x", 'G');
+        // printf(" Sending G (%02x) ", 'G');
         struct milcan_frame frame = MILCAN_MAKE_ENTER_CONFIG_2(interface->sourceAddress);
         interface_send(interface, &frame);  // Sync frames bypass the Tx queue
         interface->config_counter++;
