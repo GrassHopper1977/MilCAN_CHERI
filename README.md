@@ -5,7 +5,15 @@ An implementation of the MilCAN A stack for CheriBSD.
 1. The Makefile should install both the Pure Caps and Hybrid versions of the SO into the correct directories.
 2. This SO can work with both the CANdo (via our conversion of the driver found [here](https://github.com/GrassHopper1977/CANdoCheriBSD)) and Geschwister Schneider/candleLight style CAN to USB devices (via our driver available [here](https://github.com/GrassHopper1977/BSD-USB-to-CAN)).
 3. The code will dynamically load the the CANdo's SO if it's needed.
-4. The Geschwister Schneider/candleLight SO (libGSUSB.so) **MUST** be present for this code to work at all.
+4. The [Geschwister Schneider/candleLight SO (libGSUSB.so)](https://github.com/GrassHopper1977/BSD-USB-to-CAN) **MUST** be present for this code to work at all.
+5. The MilCAN A Specification MWG-MILA-001 Revision 3 can be found [here](http://www.milcan.org).
+
+
+## Using This Library
+1. Run the Makefile, which will also place the SO files into the correct folders.
+2. test.c shows a basic example of using the library.
+3. test2.c demonstrates entering System Configuration Mode.
+4. tests.c is a helper for the test script (runtests.sh) and contains code for all functions of this library.
 
 ## Functions
 
