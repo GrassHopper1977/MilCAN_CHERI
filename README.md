@@ -3,9 +3,9 @@ An implementation of the MilCAN A stack for CheriBSD.
 
 ## Notes:
 1. The Makefile should install both the Pure Caps and Hybrid versions of the SO into the correct directories.
-2. This SO can work with both the CANdo (via our conversion of the driver found [here](https://github.com/GrassHopper1977/CANdoCheriBSD)) and Geschwister Schneider/candleLight style CAN to USB devices (via our driver available [here](https://github.com/GrassHopper1977/BSD-USB-to-CAN)).
+2. This SO can work with both the CANdo (via our conversion of the driver found [here](https://github.com/GrassHopper1977/CANdoCheriBSD)) and Geschwister Schneider/candleLight style CAN to USB devices (via our driver available [here](https://github.com/GrassHopper1977/BSD_GSUSB)).
 3. The code will dynamically load the the CANdo's SO if it's needed.
-4. The [Geschwister Schneider/candleLight SO (libGSUSB.so)](https://github.com/GrassHopper1977/BSD-USB-to-CAN) **MUST** be present for this code to work at all.
+4. The [Geschwister Schneider/candleLight SO (libGSUSB.so)](https://github.com/GrassHopper1977/BSD_GSUSB) **MUST** be present for this code to work at all.
 5. The MilCAN A Specification MWG-MILA-001 Revision 3 can be found [here](http://www.milcan.org).
 
 
@@ -21,7 +21,7 @@ An implementation of the MilCAN A stack for CheriBSD.
 Where:
 * speed: One of MILCAN_A_250K, MILCAN_A_500K or MILCAN_A_1M.
 * sync_freq_hz: The frequency to send Sync Frame at. You can also use the defaults, like MILCAN_A_250K_DEFAULT_SYNC_HZ, MILCAN_A_500K_DEFAULT_SYNC_HZ, MILCAN_A_1M_DEFAULT_SYNC_HZ.
-* sourceAddress: The MilCAN device address. 0 is invalid. The lower teh address the higher the priority.
+* sourceAddress: The MilCAN device address. 0 is invalid. The lower the address the higher the priority.
 * can_interface_type: One of CAN_INTERFACE_CANDO or CAN_INTERFACE_GSUSB_SO
 * moduleNumber: 0 is the first USB to CAN device plugged in, 1 is the second, etc. The GSUSB and CANdo devices have separate counts. If we had one of each type, they would both be moduleNumber 0.
 * options: 0 or value consisting of any of these OR'd together: MILCAN_A_OPTION_SYNC_MASTER, MILCAN_A_OPTION_ECHO or, MILCAN_A_OPTION_LISTEN_CONTROL.
