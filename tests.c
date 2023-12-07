@@ -1681,13 +1681,13 @@ int main(int argc, char *argv[])
       ret = test0(testNo, MILCAN_A_500K_DEFAULT_SYNC_HZ, 10, 0, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
       break;
     case '3':
-      ret = test0(testNo, MILCAN_A_500K_DEFAULT_SYNC_HZ, 10, 0, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
+      ret = test0(testNo, 64, 10, 0, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
       break;
     case '4':
       ret = test0(testNo, MILCAN_A_500K_DEFAULT_SYNC_HZ, 10, 10, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
       break;
     case '5':
-      ret = test0(testNo, MILCAN_A_500K_DEFAULT_SYNC_HZ, 10, 10, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
+      ret = test0(testNo, 64, 10, 10, CAN_INTERFACE_GSUSB_SO, 0, 12, CAN_INTERFACE_CANDO, 0, 10);
       break;
     case '6':
       ret = test1(testNo, MILCAN_A_500K_DEFAULT_SYNC_HZ, 
